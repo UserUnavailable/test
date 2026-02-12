@@ -1,0 +1,19 @@
+{
+	"extension": {
+		"version": "0.8.2026011200",
+		"json": 2
+	},
+	"project": {
+		"name": "test",
+		"description": "",
+		"creationDate": "2026/2/12 14:18:44",
+		"platform": "V5",
+		"language": "cpp",
+		"slot": 1,
+		"sdkVersion": "V5_20240802_15_00_00",
+		"cpp": {
+			"includePath": [],
+			"printf_float": true
+		}
+	}
+}
