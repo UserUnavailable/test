@@ -732,84 +732,6 @@ void Run_gyro(double enc, float g=now)
   RunStop(brake);
 }
 
-///////////////////////////////////////////////////////////////////////////////////
-// 测试函数(含电机速度日志)
-///////////////////////////////////////////////////////////////////////////////////
-void Turn_Gyro(float target); //前置声明,Turn_Gyro定义在后面
-bool test_log_active = false; //日志任务运行标志
-
-/**
- * @brief 电机速度日志任务
- * @return 0
- * 每50ms输出一次6个底盘电机的速度(RPM)到电脑终端
- */
-int test_log_task_fn()
-{
-  float start_time = Brain.timer(timeUnits::msec);
-  printf("time_ms, L1_rpm, L2_rpm, L3_rpm, R1_rpm, R2_rpm, R3_rpm\n");
-  while(test_log_active)
-  {
-    float t = Brain.timer(timeUnits::msec) - start_time;
-    float l1 = LeftRun_1.velocity(velocityUnits::rpm);
-    float l2 = LeftRun_2.velocity(velocityUnits::rpm);
-    float l3 = LeftRun_3.velocity(velocityUnits::rpm);
-    float r1 = RightRun_1.velocity(velocityUnits::rpm);
-    float r2 = RightRun_2.velocity(velocityUnits::rpm);
-    float r3 = RightRun_3.velocity(velocityUnits::rpm);
-    printf("%.0f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f\n", t, l1, l2, l3, r1, r2, r3);
-    vex::task::sleep(50);
-  }
-  return 0;
-}
-
-task test_log_task_handle;
-
-/**
- * @brief 直线行驶测试函数(含实时速度日志)
- * @param enc 目标编码器值(度), 正值前进, 负值后退
- * 
- * 调用Run_gyro行驶,同时在后台任务中每50ms
- * 将6个底盘电机的速度(RPM)通过printf输出到电脑终端
- * 格式: CSV (time_ms, L1, L2, L3, R1, R2, R3)
- */
-void test_straight(double enc)
-{
-  //启动速度日志任务
-  test_log_active = true;
-  test_log_task_handle = task(test_log_task_fn);
-  
-  //执行直线行驶(g使用默认值now)
-  Run_gyro(enc);
-  
-  //停止日志任务
-  test_log_active = false;
-  vex::task::sleep(100); //等待最后一次日志输出完成
-  printf("--- test_straight complete, enc=%.1f ---\n", enc);
-}
-
-/**
- * @brief 转向测试函数(含实时速度日志)
- * @param angle 目标角度
- * 
- * 调用Turn_Gyro转向,同时在后台任务中每50ms
- * 将6个底盘电机的速度(RPM)通过printf输出到电脑终端
- * 格式: CSV (time_ms, L1, L2, L3, R1, R2, R3)
- */
-void test_turn(float angle)
-{
-  //启动速度日志任务
-  test_log_active = true;
-  test_log_task_handle = task(test_log_task_fn);
-  
-  //执行PID转向
-  Turn_Gyro(angle);
-  
-  //停止日志任务
-  test_log_active = false;
-  vex::task::sleep(100); //等待最后一次日志输出完成
-  printf("--- test_turn complete, angle=%.1f ---\n", angle);
-}
-
 /**
  * @brief 双距离传感器辅助直线行驶(陀螺仪+测距仪双重纠偏)
  * @param dis 目标距离(毫米), 当检测距离满足条件时停止
@@ -1833,5 +1755,155 @@ int AutoScreen()
     wait(20, msec);
   }
   return 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////////
+// 测试函数(含电机速度日志)
+///////////////////////////////////////////////////////////////////////////////////
+bool test_log_active = false; //日志任务运行标志
+
+/**
+ * @brief 电机速度日志任务
+ * @return 0
+ * 每50ms输出一次6个底盘电机速度绝对值的均值(RPM)到电脑终端
+ */
+int test_log_task_fn()
+{
+  float start_time = Brain.timer(timeUnits::msec);
+  printf("time_ms, avg_abs_rpm\n");
+  while(test_log_active)
+  {
+    float t = Brain.timer(timeUnits::msec) - start_time;
+    float l1 = fabs(LeftRun_1.velocity(velocityUnits::rpm));
+    float l2 = fabs(LeftRun_2.velocity(velocityUnits::rpm));
+    float l3 = fabs(LeftRun_3.velocity(velocityUnits::rpm));
+    float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
+    float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
+    float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
+    float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
+    printf("%.0f, %.1f\n", t, avg_abs_rpm);
+    vex::task::sleep(50);
+  }
+  return 0;
+}
+
+task test_log_task_handle;
+
+/**
+ * @brief 直线行驶测试函数(含实时速度日志)
+ * @param enc 目标编码器值(度), 正值前进, 负值后退
+ * 
+ * 调用Run_gyro行驶,同时在后台任务中每50ms
+ * 将6个底盘电机速度绝对值的均值(RPM)通过printf输出到电脑终端
+ * 格式: CSV (time_ms, avg_abs_rpm)
+ */
+void test_straight(double enc)
+{
+  //启动速度日志任务
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  
+  //执行直线行驶(g使用默认值now)
+  Run_gyro(enc);
+  
+  //停止日志任务
+  test_log_active = false;
+  vex::task::sleep(100); //等待最后一次日志输出完成
+  printf("--- test_straight complete, enc=%.1f ---\n", enc);
+}
+
+/**
+ * @brief 转向测试函数(含实时速度日志)
+ * @param angle 目标角度
+ * 
+ * 调用Turn_Gyro转向,同时在后台任务中每50ms
+ * 将6个底盘电机速度绝对值的均值(RPM)通过printf输出到电脑终端
+ * 格式: CSV (time_ms, avg_abs_rpm)
+ */
+void test_turn(float angle)
+{
+  //启动速度日志任务
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  
+  //执行PID转向
+  Turn_Gyro(angle);
+  
+  //停止日志任务
+  test_log_active = false;
+  vex::task::sleep(100); //等待最后一次日志输出完成
+  printf("--- test_turn complete, angle=%.1f ---\n", angle);
+}
+
+float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
+
+/**
+ * @brief 最小驱动功率测试 - 日志任务
+ * @return 0
+ * 每50ms输出: 时间(秒), 当前功率%, 实际与理论转速差值(diff)
+ */
+int test_minspeed_log_fn()
+{
+  float start_time = Brain.timer(timeUnits::msec);
+  printf("time_s, power_pct, diff\n");
+  while(test_log_active)
+  {
+    float t = (Brain.timer(timeUnits::msec) - start_time) / 1000.0; // 单位：秒
+    float l1 = fabs(LeftRun_1.velocity(velocityUnits::rpm));
+    float l2 = fabs(LeftRun_2.velocity(velocityUnits::rpm));
+    float l3 = fabs(LeftRun_3.velocity(velocityUnits::rpm));
+    float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
+    float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
+    float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
+    float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
+    //float avg_abs_rpm = r3;
+    float theoretical_rpm = 200.0 * test_minspeed_power / 100.0;
+    float diff = avg_abs_rpm - theoretical_rpm;
+    printf("%.1f, %.0f, %.1f\n", t, test_minspeed_power, diff);
+    vex::task::sleep(50);
+  }
+  return 0;
+}
+
+/**
+ * @brief 最小驱动功率测试函数
+ * 
+ * 从0%到30%功率,每2%递增,交替前后方向驱动机器人
+ * 每次驱动5秒,停止2秒,同时后台日志任务每50ms输出:
+ * 时间(秒), 当前功率%, 实际与理论转速差值(diff)
+ */
+void test_minspeed()
+{
+  //启动日志任务
+  test_log_active = true;
+  test_minspeed_power = 0;
+  test_log_task_handle = task(test_minspeed_log_fn);
+
+  bool forward = true; //第一次往前走
+
+  for(float power = 0; power <= 30; power += 2)
+  {
+    test_minspeed_power = power; //更新当前功率,供日志任务读取
+
+    //驱动5秒
+    if(forward)
+      Run_Ctrl(power, power);   //前进
+    else
+      Run_Ctrl(-power, -power);   //后退
+
+    vex::task::sleep(5000);
+
+    //停止2秒
+    RunStop(brake);
+    vex::task::sleep(2000);
+
+    //下一次反方向
+    forward = !forward;
+  }
+
+  //停止日志任务
+  test_log_active = false;
+  vex::task::sleep(100);
+  printf("--- test_minspeed complete ---\n");
 }
 ///////////////////////////////////////////////////////////////////////////////
