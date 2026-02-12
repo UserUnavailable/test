@@ -10,27 +10,32 @@ Side=1;
 Start=Gyro.rotation(degrees)-now*Side;
 if(Alliance==-1){ 
   Get_Ball(2);
-  Run_gyro(350,50,now);
+  //  Run_gyro(350,50,now);
+  Run_gyro(350);
   RunStop(coast);
   wait(50);
   Load.set(true);
   Up.set(false);
   wait(150);
   Turn_Gyro(-130);
-  Run_gyro(70,-40,now);
+  //  Run_gyro(70,-40,now);
+  Run_gyro(-70);
   Get_Ball(1);
-  Run_gyro(100,-30,now);
+  //  Run_gyro(100,-30,now);
+  Run_gyro(-100);
   wait(1300);
   Load.set(false);
   Get_Ball(0);
   wait(200);
   Get_Ball(2);
-  Run_gyro(730,80,now);
+  //  Run_gyro(730,80,now);
+  Run_gyro(730);
   Load.set(true);
   Turn_Gyro(-180);
   Get_Ball(2);
   //wait(20000);
-  Run_gyro(50,50,now);
+  //  Run_gyro(50,50,now);
+  Run_gyro(50);
   Run_time(50,300);
   wait(100);
   Wing_L.set(true);
@@ -41,7 +46,8 @@ if(Alliance==-1){
   wait(500);
   Up.set(true);
   Turn_Gyro(-182);
-  Run_gyro(410,-80,now,false);
+  //  Run_gyro(410,-80,now,false);
+  Run_gyro(-410);
   Run_time(-20,300);
   Load.set(false);
   Get_Ball(1);
@@ -50,43 +56,53 @@ if(Alliance==-1){
   Run_time(20,50);
   wait(1550);
   Get_Ball(0);
-  Run_gyro(70,30,now);
+  //  Run_gyro(70,30,now);
+  Run_gyro(70);
   //Up.set(false);
   Turn_Gyro(-135);
-  Run_gyro(190,-30,now); //210
+  //  Run_gyro(190,-30,now); //210
+  Run_gyro(-190); //210
   Turn_Gyro(-180);
   JoyStop();
   wait(100);
-  Run_gyro(100,-60,now,false);
-  Run_gyro(100,-60,now+5,false);
-  Run_gyro(100,-60,now-5,false);
+  //  Run_gyro(100,-60,now,false);
+  Run_gyro(-100);
+  //  Run_gyro(100,-60,now+5,false);
+  Run_gyro(-100, now+5);
+  //  Run_gyro(100,-60,now-5,false);
+  Run_gyro(-100, now-5);
   Turn_Gyro(-170);
   RunStop(hold);
 }
 else{
   if(Alliance==1){
     Get_Ball(2);
-    Run_gyro(350,50,now);
+    //    Run_gyro(350,50,now);
+    Run_gyro(350);
     RunStop(coast);
     wait(50);
     Load.set(true);
     Up.set(false);
     wait(150);
     Turn_Gyro(-130);
-    Run_gyro(70,-40,now);
+    //    Run_gyro(70,-40,now);
+    Run_gyro(-70);
     Get_Ball(1);
-    Run_gyro(100,-30,now);
+    //    Run_gyro(100,-30,now);
+    Run_gyro(-100);
     wait(1300);
     Load.set(false);
     Get_Ball(0);
     wait(200);
     Get_Ball(2);
-    Run_gyro(730,80,now);
+    //    Run_gyro(730,80,now);
+    Run_gyro(730);
     Load.set(true);
     Turn_Gyro(-180);
     Get_Ball(2);
     //wait(20000);
-    Run_gyro(50,50,now);
+    //    Run_gyro(50,50,now);
+    Run_gyro(50);
     Run_time(50,300);
     wait(100);
     Wing_L.set(true);
@@ -97,7 +113,8 @@ else{
     wait(500);
     Up.set(true);
     Turn_Gyro(-182);
-    Run_gyro(410,-80,now,false);
+    //    Run_gyro(410,-80,now,false);
+    Run_gyro(-410);
     Run_time(-20,300);
     Load.set(false);
     Get_Ball(1);
@@ -106,16 +123,21 @@ else{
     Run_time(20,50);
     wait(1550);
     Get_Ball(0);
-    Run_gyro(70,30,now);
+    //    Run_gyro(70,30,now);
+    Run_gyro(70);
     //Up.set(false);
     Turn_Gyro(-135);
-    Run_gyro(190,-30,now); //210
+    //    Run_gyro(190,-30,now); //210
+    Run_gyro(-190); //210
     Turn_Gyro(-180);
     JoyStop();
     wait(100);
-    Run_gyro(100,-60,now,false);
-    Run_gyro(100,-60,now+5,false);
-    Run_gyro(100,-60,now-5,false);
+    //    Run_gyro(100,-60,now,false);
+    Run_gyro(-100);
+    //    Run_gyro(100,-60,now+5,false);
+    Run_gyro(-100, now+5);
+    //    Run_gyro(100,-60,now-5,false);
+    Run_gyro(-100, now-5);
     Turn_Gyro(-170);
     RunStop(hold);
   }

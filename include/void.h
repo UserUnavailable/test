@@ -673,81 +673,81 @@ void Wall_Stop(int spd,float timeout)
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
- * @brief 陀螺仪辅助直线行驶(PD控制)
- * @param enc 目标编码器值(度)
- * @param power 基础功率(0-100)
+ * @brief 陀螺仪辅助直线行驶(全程PD控制)
+ * @param enc 目标编码器值(度), 正值前进, 负值后退
  * @param g 目标角度
- * @param ramp 是否启用比例减速(默认为true)
- * 使用陀螺仪实时纠偏,保证直线行驶精度
+ * 
+ * 全程使用双PD控制:
+ *   1. 陀螺仪PD: 航向纠偏,保证直线精度
+ *   2. 距离PD: 自动计算功率,远处加速、近处减速
  */
-void Run_gyro(double enc , double power, float g, bool ramp=true)
+void Run_gyro(double enc, float g=now)
 {
-  //enc=enc*3;
   g=Side*g+Start; //根据场地方向调整目标角度
   LeftRun_1.resetPosition();
   RightRun_1.resetPosition();
   
-  //PID参数
-  //float gyro_kp = 1;
-  float gyro_kp = 2;   //角度比例系数
-  float gyro_kd = 20;  //角度微分系数
-  float ramp_kp = 0.4; //减速比例系数
+  //陀螺仪PD参数(航向纠偏)
+  float gyro_kp = 2;    //角度比例系数
+  float gyro_kd = 20;   //角度微分系数
   
-  bool finish;//跳出标志
-  float menc=0;//左右轮编码器平均值
-  float vg = 0;//角速度差(微分项)
-  float vm = 0;//线速度差(微分项)
-  float turnpower;//转向补偿功率
-  float movepower;//移动补偿功率
-  float gyro_lasterror;//上一次角度误差
-  float move_lasterror;//上一次距离误差
-  float move_err = fabs(enc) - fabs(menc);//编码器当前与目标差值
-  float gyro_err = g - Gyro.rotation(degrees) ;//陀螺仪当前与目标差值
+  //距离PD参数(速度控制) — 可根据实际表现调参
+  float move_kp = 0.5;  //距离比例系数
+  float move_kd = 3.0;  //距离微分系数(阻尼,防过冲)
+  float max_power = 80; //最大功率限制
+  float min_power = 15; //最小功率保底
 
-  double total_enc = fabs(enc); //总距离(度)
+  float menc = 0;        //左右轮编码器平均值
+  float vg = 0;          //角速度差(微分项)
+  float vm = 0;          //线速度差(微分项)
+  float turnpower;       //转向补偿功率
+  float movepower;       //距离PD输出功率
+  float gyro_lasterror;  //上一次角度误差
+  float move_lasterror;  //上一次距离误差
+  float move_err = fabs(enc);                   //剩余距离(初始=总距离)
+  float gyro_err = g - Gyro.rotation(degrees);  //陀螺仪当前与目标差值
 
   gyro_lasterror = gyro_err;
-  //int timeout =  enc < 300 ? 500 : enc * 1.5;
-  float Timer=Brain.timer(timeUnits::sec);
-  float timeout=fabs((0.1*enc)/power); //根据距离和速度计算超时时间
-  
-	while((Brain.timer(timeUnits::sec)-Timer)<=timeout+0.5)
+  move_lasterror = move_err;
+  float Timer = Brain.timer(timeUnits::sec);
+  float timeout = fabs(enc) / 200.0 + 1.0; //超时保护(按200deg/s估算+1s余量)
+
+  while((Brain.timer(timeUnits::sec) - Timer) <= timeout)
   {
     //实时更新编码器和陀螺仪数据
-    menc = (fabs(LeftRun_1.position(rotationUnits::deg))+ fabs(RightRun_1.position(rotationUnits::deg)))/2;
-    move_err = fabs(enc) - fabs(menc);
-    gyro_err = g - Gyro.rotation(degrees) ;
+    menc = (fabs(LeftRun_1.position(rotationUnits::deg)) + fabs(RightRun_1.position(rotationUnits::deg))) / 2;
+    move_err = fabs(enc) - menc;
+    gyro_err = g - Gyro.rotation(degrees);
     vg = gyro_err - gyro_lasterror;  //计算角度变化率
-    vm = move_err-move_lasterror;    //计算距离变化率
+    vm = move_err - move_lasterror;  //计算距离变化率(正常行驶时vm<0)
     gyro_lasterror = gyro_err;
     move_lasterror = move_err;
     
-    //PD控制计算转向补偿
-    turnpower = gyro_kp*gyro_err + gyro_kd * vg;
+    //陀螺仪PD: 航向纠偏
+    turnpower = gyro_kp * gyro_err + gyro_kd * vg;
 
-    // 比例减速逻辑: 剩余1/3距离时开始减速
-    double current_power = fabs(power);
-    double decel_dist = total_enc / 3.0; // 减速阈值(总距离的1/3)
-    
-    if(ramp && fabs(move_err) < decel_dist) 
-    {
-       // 线性减速: current_power * (剩余距离/减速阈值)
-       current_power = current_power * (fabs(move_err) / decel_dist);
-    }
-    if(current_power < 20) current_power = 20; // 最小速度限制
-    
-    // 恢复原有符号方向
-    double final_power = sgn(power) * current_power;
+    //距离PD: 全程速度自动控制
+    //  远处: move_err大 → movepower大 → 高速行驶
+    //  近处: move_err小 → movepower小 → 自然减速
+    //  D项(vm): 速度越快vm越负 → 抑制加速,防止过冲
+    movepower = move_kp * move_err + move_kd * vm;
 
-    //到达目标判断
-    if (fabs(enc)-fabs(menc)<2 && fabs(vm) < 1)//距离误差<2度 且 速度变化<1
+    //功率限幅
+    if(movepower > max_power) movepower = max_power;
+    if(move_err > 5 && movepower < min_power) movepower = min_power; //仅在未接近目标时保底
+
+    //应用行驶方向(enc正负决定前进/后退)
+    double final_power = sgn(enc) * movepower;
+
+    //到达目标判断: 距离误差<2度 且 速度稳定
+    if(fabs(move_err) < 2 && fabs(vm) < 1)
     {
       break;
     }
     else
     {
-    //应用补偿后的功率到左右电机
-    Run_Ctrl((sgn(enc)*final_power)+ turnpower,-(sgn(enc)*final_power) +turnpower);
+      //应用补偿后的功率到左右电机
+      Run_Ctrl(final_power + turnpower, -final_power + turnpower);
     }
   }
   RunStop(brake);
