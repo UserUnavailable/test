@@ -752,6 +752,85 @@ void Run_gyro(double enc, float g=now)
   }
   RunStop(brake);
 }
+
+///////////////////////////////////////////////////////////////////////////////////
+// 测试函数(含电机速度日志)
+///////////////////////////////////////////////////////////////////////////////////
+void Turn_Gyro(float target); //前置声明,Turn_Gyro定义在后面
+bool test_log_active = false; //日志任务运行标志
+
+/**
+ * @brief 电机速度日志任务
+ * @return 0
+ * 每50ms输出一次6个底盘电机的速度(RPM)到电脑终端
+ */
+int test_log_task_fn()
+{
+  float start_time = Brain.timer(timeUnits::msec);
+  printf("time_ms, L1_rpm, L2_rpm, L3_rpm, R1_rpm, R2_rpm, R3_rpm\n");
+  while(test_log_active)
+  {
+    float t = Brain.timer(timeUnits::msec) - start_time;
+    float l1 = LeftRun_1.velocity(velocityUnits::rpm);
+    float l2 = LeftRun_2.velocity(velocityUnits::rpm);
+    float l3 = LeftRun_3.velocity(velocityUnits::rpm);
+    float r1 = RightRun_1.velocity(velocityUnits::rpm);
+    float r2 = RightRun_2.velocity(velocityUnits::rpm);
+    float r3 = RightRun_3.velocity(velocityUnits::rpm);
+    printf("%.0f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f\n", t, l1, l2, l3, r1, r2, r3);
+    vex::task::sleep(50);
+  }
+  return 0;
+}
+
+task test_log_task_handle;
+
+/**
+ * @brief 直线行驶测试函数(含实时速度日志)
+ * @param enc 目标编码器值(度), 正值前进, 负值后退
+ * 
+ * 调用Run_gyro行驶,同时在后台任务中每50ms
+ * 将6个底盘电机的速度(RPM)通过printf输出到电脑终端
+ * 格式: CSV (time_ms, L1, L2, L3, R1, R2, R3)
+ */
+void test_straight(double enc)
+{
+  //启动速度日志任务
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  
+  //执行直线行驶(g使用默认值now)
+  Run_gyro(enc);
+  
+  //停止日志任务
+  test_log_active = false;
+  vex::task::sleep(100); //等待最后一次日志输出完成
+  printf("--- test_straight complete, enc=%.1f ---\n", enc);
+}
+
+/**
+ * @brief 转向测试函数(含实时速度日志)
+ * @param angle 目标角度
+ * 
+ * 调用Turn_Gyro转向,同时在后台任务中每50ms
+ * 将6个底盘电机的速度(RPM)通过printf输出到电脑终端
+ * 格式: CSV (time_ms, L1, L2, L3, R1, R2, R3)
+ */
+void test_turn(float angle)
+{
+  //启动速度日志任务
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  
+  //执行PID转向
+  Turn_Gyro(angle);
+  
+  //停止日志任务
+  test_log_active = false;
+  vex::task::sleep(100); //等待最后一次日志输出完成
+  printf("--- test_turn complete, angle=%.1f ---\n", angle);
+}
+
 /**
  * @brief 双距离传感器辅助直线行驶(陀螺仪+测距仪双重纠偏)
  * @param dis 目标距离(毫米), 当检测距离满足条件时停止
