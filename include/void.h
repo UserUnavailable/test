@@ -1840,27 +1840,35 @@ float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
 /**
  * @brief 最小驱动功率测试 - 日志任务
  * @return 0
- * 每50ms输出: 时间(分钟), 实际与理论转速差值(diff)
+ * 每50ms采集{min, diff},不换行,以二维数组格式连续输出:
+ * {{min,diff},{min,diff},...}
  */
 int test_minspeed_log_fn()
 {
   float start_time = Brain.timer(timeUnits::msec);
-  printf("min, diff\n");
+  bool first = true;
+  printf("{");
   while(test_log_active)
   {
-    float t = (Brain.timer(timeUnits::msec) - start_time) / 60000.0; // 单位：分钟
+    float t = (Brain.timer(timeUnits::msec) - start_time) / 1000.0; // 单位：分钟
     float l1 = fabs(LeftRun_1.velocity(velocityUnits::rpm));
     float l2 = fabs(LeftRun_2.velocity(velocityUnits::rpm));
     float l3 = fabs(LeftRun_3.velocity(velocityUnits::rpm));
     float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
     float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
     float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
-    float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
+    //float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
+    float avg_abs_rpm = r3;
     float theoretical_rpm = 200.0 * test_minspeed_power / 100.0;
     float diff = avg_abs_rpm - theoretical_rpm;
-    printf("%.2f, %.1f\n", t, diff);
+
+    if(!first) printf(",");
+    printf("{%.2f,%.1f}", t, diff);
+    first = false;
+
     vex::task::sleep(50);
   }
+  printf("}\n");
   return 0;
 }
 
@@ -1868,8 +1876,8 @@ int test_minspeed_log_fn()
  * @brief 最小驱动功率测试函数
  * 
  * 从0%到30%功率,每2%递增,交替前后方向驱动机器人
- * 每次驱动5秒,停止2秒,同时后台日志任务每50ms输出:
- * 时间(分钟), 实际与理论转速差值(diff)
+ * 每次驱动5秒,停止2秒,同时后台日志任务每50ms采集数据
+ * 以二维数组格式输出: {{min,diff},{min,diff},...}
  */
 void test_minspeed()
 {
