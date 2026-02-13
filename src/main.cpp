@@ -145,9 +145,9 @@ Up.set(true);
   ColorThread=thread(Color_Control);
 // ..........................................................................
   AutoPro();
-  test_straight(200);
   */
-  test_straight(500);
+  Side=1; //AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
+  test_gyro(2000);
   //test_minspeed();
   
   // Insert autonomous user code here.

@@ -688,8 +688,8 @@ void Run_gyro(double enc, float g=now)
   
   //PD参数
   //float gyro_kp = 1;
-  float gyro_kp = 0;   //角度比例系数
-  float gyro_kd = 0;  //角度微分系数
+  float gyro_kp = 3;   //角度比例系数
+  float gyro_kd = 25;  //角度微分系数
   float move_kp = 0.13;  //距离比例系数
   float move_kd = 0.2;  //距离微分系数(阻尼,防过冲)
 
@@ -1888,8 +1888,12 @@ int test_gyro_log_fn()
  *   heading_err(航向误差), left_avg/right_avg(左右均速), lr_diff(左右速差)
  * 用于观察陀螺仪PD纠偏的实时效果
  */
-void test_gyro(double enc, float g=now)
+void test_gyro(double enc, float g=0)
 {
+  //初始化坐标系:当前朝向为0°
+  now = 0;
+  Start = Gyro.rotation(degrees);
+
   //计算变换后的目标航向,供日志任务读取
   test_gyro_target_heading = Side * g + Start;
 
@@ -1907,6 +1911,8 @@ void test_gyro(double enc, float g=now)
   test_log_active = false;
   vex::task::sleep(100); //等待最后一次日志输出完成
   printf("--- test_gyro complete, enc=%.1f, g=%.1f ---\n", enc, g);
+  printf("DEBUG: Side=%d, Start=%.2f, now=%.2f, g=%.2f, gyro=%.2f, target=%.2f\n",
+         Side, Start, now, g, Gyro.rotation(degrees), test_gyro_target_heading);
 }
 
 float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
