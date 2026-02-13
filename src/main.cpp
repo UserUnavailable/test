@@ -135,6 +135,8 @@ void pre_auton(void) {
 /*---------------------------------------------------------------------------*/
 
 void autonomous(void) {
+  Up.set(true);
+  Basket.set(true);
   /*
 Up.set(true);
   Basket.set(true);
@@ -145,7 +147,8 @@ Up.set(true);
   AutoPro();
   test_straight(200);
   */
-  test_minspeed();
+  test_straight(500);
+  //test_minspeed();
   
   // Insert autonomous user code here.
   // ..........................................................................

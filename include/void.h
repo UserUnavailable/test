@@ -22,6 +22,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 全局变量定义
 ///////////////////////////////////////////////////////////////////////////////
+float motor_min_speed = 26; //电机最小驱动功率(自动阶段统一使用)
+
 //int auto_color_ctrl=0;//自动颜色控制
 extern int auto_color_ctrl=0; //自动颜色控制开关: 0-关闭, 1-开启
 extern int out_count=0;       //输出计数器
@@ -684,16 +686,19 @@ void Run_gyro(double enc, float g=now)
   LeftRun_1.resetPosition();
   RightRun_1.resetPosition();
   
-  //P参数
+  //PD参数
   //float gyro_kp = 1;
-  float gyro_kp = 2;   //角度比例系数
-  float move_kp = 0.5;  //距离比例系数
-  
+  float gyro_kp = 0;   //角度比例系数
+  float gyro_kd = 0;  //角度微分系数
+  float move_kp = 0.13;  //距离比例系数
+  float move_kd = 0.2;  //距离微分系数(阻尼,防过冲)
+
   float menc=0;//左右轮编码器平均值
   float vm = 0;//线速度差
   float turnpower;//转向补偿功率
   float movepower;//移动补偿功率
   float move_lasterror;//上一次距离误差
+  float gyro_lasterror = 0;//上一次角度误差
   float move_err = fabs(enc) - fabs(menc);//编码器当前与目标差值
   float gyro_err = g - Gyro.rotation(degrees) ;//陀螺仪当前与目标差值
 
@@ -710,12 +715,13 @@ void Run_gyro(double enc, float g=now)
     vm = move_err-move_lasterror;    //计算距离变化率
     move_lasterror = move_err;
     
-    //P控制计算转向补偿
-    turnpower = gyro_kp*gyro_err;
+    //PD控制计算转向补偿
+    turnpower = gyro_kp*gyro_err + gyro_kd*(gyro_err - gyro_lasterror);
+    gyro_lasterror = gyro_err;
 
-    //P控制计算行驶功率
-    movepower = move_kp * move_err;
-    if(movepower < 20) movepower = 20; // 最小速度限制
+    //PD控制计算行驶功率
+    movepower = move_kp * move_err + move_kd * vm;
+    if(movepower < motor_min_speed) movepower = motor_min_speed; // 最小速度限制
     double final_power = movepower;
 
     //到达目标判断
@@ -844,7 +850,7 @@ void FAuto_Run_gyro(double dis , double power, float g, bool reverse=false){
            // 线性减速
            current_power = current_power * (dist_err / decel_dist);
        }
-       if(current_power < 20) current_power = 20; // 最小速度限制
+       if(current_power < motor_min_speed) current_power = motor_min_speed; // 最小速度限制
     }
     
     // 恢复原有符号方向
@@ -947,7 +953,7 @@ void Dis_Run_gyro(double dis, double power, float g, int sensor_id, bool reverse
                // 线性减速
                current_power = current_power * (dist_err / decel_dist);
            }
-           if(current_power < 20) current_power = 20; // 最小速度限制
+           if(current_power < motor_min_speed) current_power = motor_min_speed; // 最小速度限制
        }
     }
     
@@ -1806,6 +1812,9 @@ void test_straight(double enc)
   //执行直线行驶(g使用默认值now)
   Run_gyro(enc);
   
+  //Run_gyro结束后继续记录1秒,观察完整减速过程
+  //vex::task::sleep(1000);
+  
   //停止日志任务
   test_log_active = false;
   vex::task::sleep(100); //等待最后一次日志输出完成
@@ -1835,13 +1844,78 @@ void test_turn(float angle)
   printf("--- test_turn complete, angle=%.1f ---\n", angle);
 }
 
+float test_gyro_target_heading = 0; //目标航向角(经Side/Start变换后),供日志任务读取
+
+/**
+ * @brief 陀螺仪纠偏测试 - 日志任务
+ * @return 0
+ * 每50ms输出: time_ms, heading_err, left_avg, right_avg, lr_diff
+ * heading_err = 目标航向 - 当前航向 (正=偏左需右修, 负=偏右需左修)
+ * lr_diff = 左侧均速 - 右侧均速 (反映turnpower纠偏效果)
+ */
+int test_gyro_log_fn()
+{
+  float start_time = Brain.timer(timeUnits::msec);
+  printf("time_ms, heading_err, left_avg, right_avg, lr_diff\n");
+  while(test_log_active)
+  {
+    float t = Brain.timer(timeUnits::msec) - start_time;
+    float heading_err = test_gyro_target_heading - Gyro.rotation(degrees);
+
+    float l1 = LeftRun_1.velocity(velocityUnits::rpm);
+    float l2 = LeftRun_2.velocity(velocityUnits::rpm);
+    float l3 = LeftRun_3.velocity(velocityUnits::rpm);
+    float r1 = RightRun_1.velocity(velocityUnits::rpm);
+    float r2 = RightRun_2.velocity(velocityUnits::rpm);
+    float r3 = RightRun_3.velocity(velocityUnits::rpm);
+
+    float left_avg  = (l1 + l2 + l3) / 3.0;
+    float right_avg = (r1 + r2 + r3) / 3.0;
+    float lr_diff   = left_avg - right_avg;
+
+    printf("%.0f, %.2f, %.1f, %.1f, %.1f\n", t, heading_err, left_avg, right_avg, lr_diff);
+    vex::task::sleep(50);
+  }
+  return 0;
+}
+
+/**
+ * @brief 陀螺仪纠偏测试函数(用于调试gyro_kp/gyro_kd)
+ * @param enc 目标编码器值(度), 正值前进, 负值后退
+ * @param g 目标角度(默认now)
+ * 
+ * 调用Run_gyro行驶,同时在后台任务中每50ms输出:
+ *   heading_err(航向误差), left_avg/right_avg(左右均速), lr_diff(左右速差)
+ * 用于观察陀螺仪PD纠偏的实时效果
+ */
+void test_gyro(double enc, float g=now)
+{
+  //计算变换后的目标航向,供日志任务读取
+  test_gyro_target_heading = Side * g + Start;
+
+  //启动陀螺仪日志任务
+  test_log_active = true;
+  test_log_task_handle = task(test_gyro_log_fn);
+
+  //执行直线行驶
+  Run_gyro(enc, g);
+
+  //Run_gyro结束后继续记录1秒,观察完整减速过程
+  vex::task::sleep(1000);
+
+  //停止日志任务
+  test_log_active = false;
+  vex::task::sleep(100); //等待最后一次日志输出完成
+  printf("--- test_gyro complete, enc=%.1f, g=%.1f ---\n", enc, g);
+}
+
 float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
 
 /**
  * @brief 最小驱动功率测试 - 日志任务
  * @return 0
- * 每50ms采集{min, diff},不换行,以二维数组格式连续输出:
- * {{min,diff},{min,diff},...}
+ * 每50ms采集{min, power, diff},不换行,以二维数组格式连续输出:
+ * {{min,power,diff},{min,power,diff},...}
  */
 int test_minspeed_log_fn()
 {
@@ -1857,13 +1931,13 @@ int test_minspeed_log_fn()
     float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
     float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
     float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
-    //float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
-    float avg_abs_rpm = r3;
+    float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
+    //float avg_abs_rpm = r3;
     float theoretical_rpm = 200.0 * test_minspeed_power / 100.0;
     float diff = avg_abs_rpm - theoretical_rpm;
 
     if(!first) printf(",");
-    printf("{%.2f,%.1f}", t, diff);
+    printf("{%.2f,%.0f,%.1f}", t, test_minspeed_power, diff);
     first = false;
 
     vex::task::sleep(50);
@@ -1894,9 +1968,9 @@ void test_minspeed()
 
     //驱动5秒
     if(forward)
-      Run_Ctrl(power, power);   //前进
+      Run_Ctrl(power, -power);   //前进
     else
-      Run_Ctrl(-power, -power);   //后退
+      Run_Ctrl(-power, power);   //后退
 
     vex::task::sleep(5000);
 
