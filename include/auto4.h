@@ -15,8 +15,7 @@ wait(500);
 Run_time(60,800);
 Load.set(false);
 Turn_Gyro(90);
-//Run_gyro(150,40,now);
-Run_gyro(150);
+Run_gyro(150,40,now);
 FAuto_Get_Ball(0);
 Turn_Gyro(0);
 FAuto_Run_gyro(Load_Dis,60,now);
@@ -26,27 +25,23 @@ wait(100);
 Turn_Gyro(-90);
 Load.set(true);
 FAuto_Get_Ball(2);
-//Run_gyro(50,50,now);
-Run_gyro(50);
+Run_gyro(50,50,now);
 Run_time(50,300);
 wait(100);
 Run_time(50,200);
 wait(1500);
 Turn_Gyro(-92);
-//Run_gyro(440,-50,now);        //第一个高杆
-Run_gyro(-440);        //第一个高杆
+Run_gyro(440,-50,now);        //第一个高杆
 Run_time(-20,300);
 Load.set(false);
 FAuto_Get_Ball(1);
 wait(2300);
 FAuto_Get_Ball(0);
-//Run_gyro(80,30,now);
-Run_gyro(80);
+Run_gyro(80,30,now);
 //Up.set(false);
 Turn_Gyro(0);
 Wall_Stop(40,1000);
-//Run_gyro(50,-30,now);
-Run_gyro(-50);
+Run_gyro(50,-30,now);
 JoyStop();
 wait(100);
 Turn_Gyro(90);
@@ -63,34 +58,29 @@ Turn_Gyro(90);
 hold_stop(100);
 Load.set(true);
 FAuto_Get_Ball(2);
-//Run_gyro(50,50,now);
-Run_gyro(50);
+Run_gyro(50,50,now);
 Run_time(50,300);
 wait(100);
 Run_time(60,200);
 wait(1500);
 Turn_Gyro(92);
-//Run_gyro(440,-50,now);      //第二个高杆
-Run_gyro(-440);      //第二个高杆
+Run_gyro(440,-50,now);      //第二个高杆
 Run_time(-20,300);
 Load.set(false);
 FAuto_Get_Ball(1);
 wait(2300);
 FAuto_Get_Ball(0);
-//Run_gyro(80,30,now);
-Run_gyro(80);
+Run_gyro(80,30,now);
 //Up.set(false);
 Turn_Gyro(180);
 hold_stop(100);
-//Run_gyro(150,50,now);
-Run_gyro(150);
+Run_gyro(150,50,now);
 JoyStop();
 wait(100);
 Turn_Gyro(90);
 hold_stop(100);
 Wall_Stop(50,1000);
-//Run_gyro(50,-30,now);
-Run_gyro(-50);
+Run_gyro(50,-30,now);
 JoyStop();
 wait(100);
 Turn_Gyro(180);
@@ -103,8 +93,7 @@ Run_time(60,800);
 Load.set(false);
 Turn_Gyro(270);
 hold_stop(100);
-//Run_gyro(150,50,now);
-Run_gyro(150);
+Run_gyro(150,50,now);
 JoyStop();
 wait(100);
 Turn_Gyro(180);
@@ -116,27 +105,23 @@ Turn_Gyro(90);
 hold_stop(100);
 Load.set(true);
 FAuto_Get_Ball(2);
-//Run_gyro(50,50,now);        
-Run_gyro(50);
+Run_gyro(50,50,now);        
 Run_time(50,300);
 wait(100);
 Run_time(60,200);
 wait(1500);
 Turn_Gyro(88);
-//Run_gyro(440,-50,now);      //第三个高杆
-Run_gyro(-440);      //第三个高杆
+Run_gyro(440,-50,now);      //第三个高杆
 Run_time(-20,300);
 Load.set(false);
 FAuto_Get_Ball(1);
 wait(2300);
 FAuto_Get_Ball(0);
-//Run_gyro(80,30,now);
-Run_gyro(80);
+Run_gyro(80,30,now);
 //Up.set(false);
 Turn_Gyro(180);
 Wall_Stop(40,1000);
-//Run_gyro(50,-30,now);
-Run_gyro(-50);
+Run_gyro(50,-30,now);
 JoyStop();
 wait(100);
 Turn_Gyro(270);
@@ -153,27 +138,23 @@ Turn_Gyro(270);
 hold_stop(100);
 Load.set(true);
 FAuto_Get_Ball(2);
-//Run_gyro(50,50,now);          
-Run_gyro(50);
+Run_gyro(50,50,now);          
 Run_time(50,300);
 wait(100);
 Run_time(60,200);
 wait(1500);
 Turn_Gyro(272);
-//Run_gyro(440,-50,now);        //第四个高杆
-Run_gyro(-440);        //第四个高杆
+Run_gyro(440,-50,now);        //第四个高杆
 Run_time(-20,300);
 Load.set(false);
 FAuto_Get_Ball(1);
 wait(2300);
 FAuto_Get_Ball(0);
-//Run_gyro(80,40,now);
-Run_gyro(80);
+Run_gyro(80,40,now);
 //Up.set(false);
 Turn_Gyro(360);
 hold_stop(100);
-//Run_gyro(400,60,now);     //停车
-Run_gyro(400);     //停车
+Run_gyro(400,60,now);     //停车
 JoyStop();
 wait(100);
 Turn_Gyro(270);

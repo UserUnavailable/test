@@ -228,14 +228,12 @@ void hook_auto_ctrl(){
       Start = Gyro.rotation(degrees);  // 当前绝对角度作为起点
       
       // 执行一键钩子动作
-      //Run_gyro(70,30,now);
-      Run_gyro(70);
+      Run_gyro(70,30,now);
       Turn(50);
       wait(400);
       now=0;
       Start=Gyro.rotation(degrees);
-      //Run_gyro(200,-30,now);
-      Run_gyro(-200);
+      Run_gyro(200,-30,now);
       Turn(-50);
       wait(300);
       Turn(0);

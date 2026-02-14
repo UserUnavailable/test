@@ -18,17 +18,34 @@ matplotlib.rcParams['font.sans-serif'] = ['PingFang SC', 'Heiti TC', 'SimHei', '
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 def load_data(filepath):
-    """读取 test_gyro 输出的 CSV，自动跳过尾部非数据行"""
-    lines = []
+    """读取 test_gyro 输出的 CSV，自动跳过尾部非数据行和字段数异常的行"""
     with open(filepath, 'r') as f:
-        for line in f:
-            stripped = line.strip()
-            # 跳过空行和非数据行（如 "--- test_gyro complete ..."）
-            if stripped and not stripped.startswith('---'):
-                lines.append(stripped)
+        raw_lines = f.readlines()
+
+    # 过滤空行和非数据行（如 "--- test_gyro complete ..."）
+    clean_lines = [l.strip() for l in raw_lines
+                   if l.strip() and not l.strip().startswith('---')]
+
+    if not clean_lines:
+        raise ValueError("CSV 文件中没有有效数据行")
+
+    header = clean_lines[0]
+    num_cols = len(header.split(','))
+
+    # 只保留字段数与表头一致的数据行，丢弃串口传输中损坏的行
+    good_lines = [header]
+    skipped = 0
+    for line in clean_lines[1:]:
+        if len(line.split(',')) == num_cols:
+            good_lines.append(line)
+        else:
+            skipped += 1
+
+    if skipped:
+        print(f"⚠ 跳过了 {skipped} 行字段数异常的数据")
 
     from io import StringIO
-    csv_text = '\n'.join(lines)
+    csv_text = '\n'.join(good_lines)
     df = pd.read_csv(StringIO(csv_text), skipinitialspace=True)
     # 列名清洗
     df.columns = [c.strip() for c in df.columns]

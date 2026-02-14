@@ -7,8 +7,7 @@ now=0;
 Start=Gyro.rotation(degrees)-now*Side;
 
 if(Alliance==-1){
-  //Run_gyro(350,60,now);
-  Run_gyro(350);
+  Run_gyro(350,60,now);
   JoyStop();
   wait(200);
   Turn_Gyro(-90);
@@ -27,8 +26,7 @@ if(Alliance==-1){
   Wing_L.set(false);
   wait(350);
   Turn_Gyro(-92);
-  //Run_gyro(380,-80,now,false);
-  Run_gyro(-380);
+  Run_gyro(380,-80,now,false);
   Run_time(-20,300);
   Load.set(false);
   Up.set(true);
@@ -40,8 +38,7 @@ if(Alliance==-1){
   Run_time(20,50);
   wait(1330);  //wait(1530);
   Get_Ball(0);
-  //Run_gyro(190,80,now); //
-  Run_gyro(190); //
+  Run_gyro(190,80,now); //
   JoyStop();
   wait(100);
   Turn_Gyro(-225);
@@ -49,33 +46,28 @@ if(Alliance==-1){
   Up.set(false);
   //wait(10000);
   Get_Ball(2);
-  //Run_gyro(550,60,now);
-  Run_gyro(550);
+  Run_gyro(550,60,now);
 
 
   
   Load.set(true);
-  //Run_gyro(100,30,now);
-  Run_gyro(100);
+  Run_gyro(100,30,now);
   JoyStop();
   wait(200);
   Turn_Gyro(-40);
-  //Run_gyro(100,-50,now,false);
-  Run_gyro(-100);
+  Run_gyro(100,-50,now,false);
   Intake(100);
   Ball(100);
   Shoot(70);
 
-  //Run_gyro(120,-50,now,false);
-  Run_gyro(-120);
+  Run_gyro(120,-50,now,false);
   JoyStop();
   wait(100);
   Run_time(10,200);
   Shoot(100);
   hold_stop(1350);         //wait(1950);
   Get_Ball(0);
-  //Run_gyro(80,20,now);
-  Run_gyro(80);
+  Run_gyro(80,20,now);
 
   Up.set(true);
   //wait(100);
@@ -86,23 +78,18 @@ if(Alliance==-1){
 
   //Get_Ball(0);
   //wait(200);
-  //Run_gyro(80,-60,now,false);
-  Run_gyro(-80);
+  Run_gyro(80,-60,now,false);
   JoyStop();
   wait(100);
 
 
   Get_Ball(2);
-  //Run_gyro(470,80,now);
-  Run_gyro(470);
+  Run_gyro(470,80,now);
   Turn_Gyro(-90);
   hold_stop(100);
-  //Run_gyro(70,-60,now,false);
-  Run_gyro(-70);
-  //Run_gyro(100,-60,now+5,false);
-  Run_gyro(-100, now+5);
-  //Run_gyro(110,-60,now-5,false);
-  Run_gyro(-110, now-5);
+  Run_gyro(70,-60,now,false);
+  Run_gyro(100,-60,now+5,false);
+  Run_gyro(110,-60,now-5,false);
   JoyStop();
   Turn_Gyro(-80);
   RunStop(hold);
@@ -110,7 +97,7 @@ if(Alliance==-1){
 else{
   if(Alliance==1){
     //Run_gyro(350,60,now);
-    Run_gyro(350);
+    Run_gyro(350,60,now);
     JoyStop();
     wait(200);
     Turn_Gyro(-90);
@@ -130,7 +117,7 @@ else{
     wait(350);
     Turn_Gyro(-92);
     //Run_gyro(380,-80,now,false);
-    Run_gyro(-380);
+    Run_gyro(380,-80,now,false);
     Run_time(-20,300);
     Load.set(false);
     Up.set(true);
@@ -143,7 +130,7 @@ else{
     wait(1330); //wait(1530);
     Get_Ball(0);
     //Run_gyro(190,80,now); //
-    Run_gyro(190); //
+    Run_gyro(190,80,now); //
     JoyStop();
     wait(100);
     Turn_Gyro(-225);
@@ -152,24 +139,24 @@ else{
     //wait(10000);
     Get_Ball(2);
     //Run_gyro(550,60,now);
-    Run_gyro(550);
+    Run_gyro(550,60,now);
       
 
     
     Load.set(true);
     //Run_gyro(100,30,now);
-    Run_gyro(100);
+    Run_gyro(100,30,now);
     JoyStop();
     wait(200);
     Turn_Gyro(-40);
     //Run_gyro(100,-50,now,false);
-    Run_gyro(-100);
+    Run_gyro(100,-50,now,false);
     Intake(100);
     Ball(100);
     Shoot(70);
 
     //Run_gyro(120,-50,now,false);
-    Run_gyro(-120);
+    Run_gyro(120,-50,now,false);
     JoyStop();
     wait(100);
     Run_time(10,200);
@@ -177,7 +164,7 @@ else{
     hold_stop(1350);         //wait(1950);
     Get_Ball(0);
     //Run_gyro(80,20,now);
-    Run_gyro(80);
+    Run_gyro(80,20,now);
 
     Up.set(true);
     //wait(100);
@@ -189,22 +176,22 @@ else{
     //Get_Ball(0);
     //wait(200);
     //Run_gyro(80,-60,now,false);
-    Run_gyro(-80);
+    Run_gyro(80,-60,now,false);
     JoyStop();
     wait(100);
 
 
     Get_Ball(2);
     //Run_gyro(470,80,now);
-    Run_gyro(470);
+    Run_gyro(470,80,now);
     Turn_Gyro(-90);
     hold_stop(100);
     //Run_gyro(70,-60,now,false);
-    Run_gyro(-70);
+    Run_gyro(70,-60,now,false);
     //Run_gyro(100,-60,now+5,false);
-    Run_gyro(-100, now+5);
+    Run_gyro(100,-60,now+5,false);
     //Run_gyro(110,-60,now-5,false);
-    Run_gyro(-110, now-5);
+    Run_gyro(110,-60,now-5,false);
     JoyStop();
     Turn_Gyro(-80);
     RunStop(hold);
