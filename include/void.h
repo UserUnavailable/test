@@ -1159,10 +1159,9 @@ void Turn_Gyro(float target)
    target=Side*target+Start; //根据场地方向调整目标角度
    float error = target - Gyro.rotation(degrees) ;//与目标角度距离
    
-   //自适应PID参数
-   float kp =fabs(error)>30&&fabs(error)<120?3.2:(fabs(error)<30?4:3);//根据误差动态调整kp
+   //PID参数(kp/kd在循环内根据误差动态调整)
+   float kp, kd;
    float ki =35;   //积分系数
-   float kd =fabs(error)>30&&fabs(error)<120?42:(fabs(error)<30?65:30); //自适应kd
    float irange=3.0;  //积分限幅
    float istart=60;   //积分启动阈值
    float dtol = 0.2;  //停止速度阈值
@@ -1185,6 +1184,10 @@ void Turn_Gyro(float target)
     error = target - Gyro.rotation(degrees) ;
     V = error - lasterror; //计算角速度(微分)
     lasterror = error;
+
+    //自适应kp/kd：根据当前误差动态切换
+    kp = fabs(error)>30&&fabs(error)<120 ? 3.2 : (fabs(error)<30 ? 4.5 : 3);
+    kd = fabs(error)>30&&fabs(error)<120 ? 42  : (fabs(error)<30 ? 35 : 30);
     
     //提前退出判断:角度误差小且电机基本停止
     if (fabs(error)<=1)
