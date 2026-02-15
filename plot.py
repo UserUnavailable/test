@@ -98,6 +98,7 @@ TEST_HEADERS: dict[str, str] = {
     "test_straight": "time_s,menc,move_err,vm,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_turn":     "time_s,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_minspeed": "time_s,power,diff",
+    "test_gyro_pd":  "time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
 }
 
 @dataclass
@@ -210,7 +211,7 @@ def plot_straight(blk: TestBlock, idx: int) -> plt.Figure:
     ax = axes[0, 1]
     ax.plot(t, df["current_power"], color=C_GREEN, lw=1.5, label="Output power (%)")
     ax.fill_between(t, 0, df["current_power"], alpha=0.12, color=C_GREEN)
-    ax.axhline(26, color=C_YELLOW, ls=":", lw=0.8, label="Min power 26%")
+    ax.axhline(20, color=C_YELLOW, ls=":", lw=0.8, label="Min power 20%")
     ax.set_ylabel("Power (%)")
     ax.set_title("Drive Power")
     ax.legend(loc="upper right")
@@ -376,6 +377,7 @@ _PLOT_FN = {
     "test_straight": plot_straight,
     "test_turn":     plot_turn,
     "test_minspeed": plot_minspeed,
+    "test_gyro_pd":  plot_straight,
 }
 
 

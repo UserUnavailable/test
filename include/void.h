@@ -788,12 +788,17 @@ void Run_gyro_new(double enc, float g=now)
   //enc=enc*3;
   g=Side*g+Start; //根据场地方向调整目标角度
   LeftRun_1.resetPosition();
+  LeftRun_2.resetPosition();
+  LeftRun_3.resetPosition();
   RightRun_1.resetPosition();
+  RightRun_2.resetPosition();
+  RightRun_3.resetPosition();
   
-  //PD参数
-  //float gyro_kp = 1;
-  float gyro_kp = 0;    //角度比例系数1.5
-  float gyro_kd = 0;  //角度微分系数 (单位现在是°/s, 旧12÷100)0.12
+  //PD参数 — gyro自适应: kp = 基准值 × RPM × kp_scale, kd = 基准值 × RPM × kd_scale
+  float gyro_kp_base = 8.0;     //基准kp (100 RPM下调优所得)
+  float gyro_kd_base = 0.5;     //基准kd (100 RPM下调优所得)
+  //float gyro_kp_scale = 0.009;  //kp的RPM自适应系数
+  //float gyro_kd_scale = 0.005;  //kd的RPM自适应系数 (比kp更大,增强减速阶段阻尼)
   float move_kp = 0.3;   //距离比例系数 500:0.3 1000:0.3 1500:0.3
   float move_kd = fabs(enc) <= 500 ? 0.03 : (fabs(enc) <= 1000 ? 0.04 : 0.05); // 距离微分系数 (单位°/s, 接近目标时vm为负→减速) 500:0.03 1000:0.04 1500:0.05
 
@@ -803,8 +808,8 @@ void Run_gyro_new(double enc, float g=now)
   float movepower;//移动补偿功率
   float move_err = fabs(enc) - fabs(menc);//编码器当前与目标差值
   float move_lasterror = move_err;//上一次距离误差(初始化为初始误差)
-  float gyro_lasterror = 0;//上一次角度误差
   float gyro_err = g - Gyro.rotation(degrees) ;//陀螺仪当前与目标差值
+  float gyro_lasterror = gyro_err;//上一次角度误差(初始化为当前误差,避免首周期vg尖峰)
 
   //int timeout =  enc < 300 ? 500 : enc * 1.5;
   float Timer=Brain.timer(timeUnits::sec);
@@ -822,8 +827,9 @@ void Run_gyro_new(double enc, float g=now)
     }
     last_time = current_time;
 
-    //实时更新编码器和陀螺仪数据
-    menc = (fabs(LeftRun_1.position(rotationUnits::deg))+ fabs(RightRun_1.position(rotationUnits::deg)))/2;
+    //实时更新编码器和陀螺仪数据 (6电机平均)
+    menc = (fabs(LeftRun_1.position(rotationUnits::deg)) + fabs(LeftRun_2.position(rotationUnits::deg)) + fabs(LeftRun_3.position(rotationUnits::deg))
+         + fabs(RightRun_1.position(rotationUnits::deg)) + fabs(RightRun_2.position(rotationUnits::deg)) + fabs(RightRun_3.position(rotationUnits::deg))) / 6.0;
     move_err = fabs(enc) - fabs(menc);
     gyro_err = g - Gyro.rotation(degrees) ;
 
@@ -831,7 +837,11 @@ void Run_gyro_new(double enc, float g=now)
     vm = (move_err - move_lasterror) / dt;    //距离变化率(°/s), 接近目标时为负
     
     
-    //PD控制计算转向补偿
+    //PD控制计算转向补偿 — 动态自适应kp/kd
+    float avg_rpm = (fabs(LeftRun_1.velocity(rpm)) + fabs(LeftRun_2.velocity(rpm)) + fabs(LeftRun_3.velocity(rpm))
+                   + fabs(RightRun_1.velocity(rpm)) + fabs(RightRun_2.velocity(rpm)) + fabs(RightRun_3.velocity(rpm))) / 6.0;
+    float gyro_kp = gyro_kp_base * avg_rpm/100;
+    float gyro_kd = gyro_kd_base * avg_rpm/100;
     float vg = (gyro_err - gyro_lasterror) / dt;  //角速度(°/s)
     turnpower = gyro_kp*gyro_err + gyro_kd*vg;
     gyro_lasterror = gyro_err;
@@ -1149,15 +1159,15 @@ void Turn_Gyro(float target)
    target=Side*target+Start; //根据场地方向调整目标角度
    float error = target - Gyro.rotation(degrees) ;//与目标角度距离
    
-   //自适应PID参数
-   float kp =fabs(error)>30&&fabs(error)<120?3.5:(fabs(error)<30?6:3);//根据误差动态调整kp
-   float ki =35;   //积分系数
-   float kd =fabs(error)>30&&fabs(error)<120?35:(fabs(error)<30?50:30); //自适应kd
+   //PID参数(去掉跳变式自适应,改为统一参数,避免30°处功率突变)
+   float kp = 2.5;    //比例系数(降低,减少满功率时间,平滑减速)
+   float ki = 35;     //积分系数
+   float kd = 40;     //微分系数(略增,增强刹车阻尼)
    float irange=3.0;  //积分限幅
    float istart=60;   //积分启动阈值
    float dtol = 0.2;  //停止速度阈值
-   float errortolerance = 2; //角度误差容忍度
-   float lim =100;    //功率限幅
+   float errortolerance = 1.5; //角度误差容忍度(收紧,提高精度)
+   float lim = 80;    //功率限幅(降低,减少惯性积累)
    
    float lasterror;   //上一次角度误差
    float V= 0;        //角速度(微分项)
@@ -1176,10 +1186,10 @@ void Turn_Gyro(float target)
     V = error - lasterror; //计算角速度(微分)
     lasterror = error;
     
-    //提前退出判断:角度误差小且电机基本停止
+    //提前退出判断:角度误差小且两侧电机都基本停止
     if (fabs(error)<=3)
     {
-      if(fabs(RightRun_1.velocity(velocityUnits::rpm))<5||fabs(LeftRun_1.velocity(velocityUnits::rpm)<5)){break;}
+      if(fabs(RightRun_1.velocity(velocityUnits::rpm))<5 && fabs(LeftRun_1.velocity(velocityUnits::rpm))<5){break;}
     }
     
     //到达判断:误差和速度都在容忍范围内,或超时
@@ -1197,6 +1207,12 @@ void Turn_Gyro(float target)
     //PID计算输出功率
     pow = kp * error + kd * V + ki*integral;
     pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
+
+    // 写入全局变量供测试日志读取
+    test_log_gyro_err = error;
+    test_log_vg = V;
+    test_log_turnpower = pow;
+
     Turn(pow);
     //lasterror = error;
     wait(10,msec);
@@ -2030,7 +2046,7 @@ void test_log_dump()
     {
       printf("%.2f,%.0f,%.1f\n", e.time_s, e.power, e.diff);
     }
-    vex::task::sleep(15); // 每行之间延迟,防止V5 USB串口缓冲区溢出
+    vex::task::sleep(30); // 每行之间延迟,防止V5 USB串口缓冲区溢出(13列≈85B跨2个USB包,需30ms)
   }
   // 最后一行需要额外等待: 85字节跨2个USB包(64B),第2包需要时间刷出
   vex::task::sleep(300);
@@ -2074,8 +2090,8 @@ void test_straight(double enc, float g=0)
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
 
-  //执行直线行驶
-  Run_gyro_new(enc);
+  //执行直线行驶(传入目标角度g, 实现弧线行驶)
+  Run_gyro_new(enc, g);
 
   //Run_gyro结束后继续记录1秒,观察完整减速过程
   //vex::task::sleep(1000);
@@ -2178,5 +2194,89 @@ void test_minspeed()
   test_log_dump();
   printf("--- test_minspeed complete ---\n");
   vex::task::sleep(200); // 确保complete信息通过串口发送完毕
+}
+
+/**
+ * @brief 恒速 gyro PD 调参测试函数
+ * @param gyro_kp 航向比例系数
+ * @param gyro_kd 航向微分系数(单位°/s)
+ * 
+ * 底盘恒定电压输出(~100 RPM)跑5秒,
+ * gyro PD算法与Run_gyro_new一致(含dt归一化),
+ * 日志复用 test_log_type=0 (test_straight_v2 格式)
+ */
+void test_gyro_pd(float gyro_kp, float gyro_kd)
+{
+  now = 0;
+  Start = Gyro.rotation(degrees);
+  float g = Side * 0 + Start;        // 目标角度 = 当前朝向
+
+  LeftRun_1.resetPosition();
+  RightRun_1.resetPosition();
+
+  // 清零全局日志变量
+  test_log_menc = 0;
+  test_log_move_err = 0;
+  test_log_vm = 0;
+  test_log_current_power = 0;
+  test_log_gyro_err = 0;
+  test_log_vg = 0;
+  test_log_turnpower = 0;
+  test_log_last_move_error = 0;
+  test_log_delta_move_err = 0;
+  test_log_dt = 0;
+
+  printf("test_gyro_pd\n");   // 标识行
+
+  // 启动日志采集（复用 type=0 = test_straight_v2 格式）
+  test_log_type = 0;
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+
+  // --- gyro PD 变量（与 Run_gyro_new 一致）---
+  float gyro_err = g - Gyro.rotation(degrees);
+  float gyro_lasterror = gyro_err;
+  float Timer = Brain.timer(timeUnits::sec);
+  float last_time = Timer;
+  float base_power = 50;              // ~100 RPM（V5 自由转速 200 RPM 的 50%）
+
+  while ((Brain.timer(timeUnits::sec) - Timer) <= 3.0)
+  {
+    float current_time = Brain.timer(timeUnits::sec);
+    float dt = current_time - last_time;
+    if (dt < 0.002) { vex::task::sleep(1); continue; }
+    last_time = current_time;
+
+    float menc = (fabs(LeftRun_1.position(rotationUnits::deg))
+                + fabs(RightRun_1.position(rotationUnits::deg))) / 2;
+    gyro_err = g - Gyro.rotation(degrees);
+
+    float vg = (gyro_err - gyro_lasterror) / dt;   // °/s
+    float turnpower = gyro_kp * gyro_err + gyro_kd * vg;
+    gyro_lasterror = gyro_err;
+
+    // 写入全局变量供日志任务读取
+    test_log_menc          = menc;
+    test_log_move_err      = 0;
+    test_log_vm            = 0;
+    test_log_current_power = base_power;
+    test_log_gyro_err      = gyro_err;
+    test_log_vg            = vg;
+    test_log_turnpower     = turnpower;
+    test_log_last_move_error = 0;
+    test_log_delta_move_err  = 0;
+    test_log_dt            = dt;
+
+    // 恒压驱动 + gyro 转向补偿
+    Run_Ctrl(base_power + turnpower, -base_power + turnpower);
+    vex::task::sleep(10);
+  }
+  RunStop(brake);
+
+  test_log_active = false;
+  vex::task::sleep(100);
+  test_log_dump();
+  printf("--- test_gyro_pd complete, kp=%.2f, kd=%.3f ---\n", gyro_kp, gyro_kd);
+  vex::task::sleep(200);
 }
 ///////////////////////////////////////////////////////////////////////////////
