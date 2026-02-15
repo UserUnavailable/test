@@ -670,7 +670,14 @@ void Wall_Stop(int spd,float timeout)
   }
   Run(0);
 }
-float test_gyro_rpm_diff = 0; //target_rpm - actual_rpm,供日志任务读取(前置声明)
+// Run_gyro内部状态,供测试日志任务读取
+float test_log_menc = 0;          //编码器位置(左右均值)
+float test_log_move_err = 0;      //剩余距离
+float test_log_vm = 0;            //距离变化率
+float test_log_current_power = 0; //实际输出功率(减速后)
+float test_log_gyro_err = 0;      //航向误差
+float test_log_vg = 0;            //航向变化率
+float test_log_turnpower = 0;     //转向补偿输出
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -692,7 +699,7 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
   //float gyro_kp = 1;
   float gyro_kp = 2;   //角度比例系数
   float gyro_kd = 20;  //角度微分系数
-  float ramp_kp = 0.4; //减速比例系数
+  float ramp_kp = 0.01; //减速比例系数
   
   bool finish;//跳出标志
   float menc=0;//左右轮编码器平均值
@@ -733,12 +740,21 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
     if(ramp && fabs(move_err) < decel_dist) 
     {
        // 线性减速: current_power * (剩余距离/减速阈值)
-       current_power = current_power * (fabs(move_err) / decel_dist);
+       current_power = current_power * (fabs(move_err) / decel_dist) * ramp_kp;
     }
     if(current_power < motor_min_speed) current_power = motor_min_speed; // 最小速度限制
     
     // 恢复原有符号方向
     double final_power = sgn(power) * current_power;
+
+    // 写入全局变量供测试日志读取
+    test_log_menc = menc;
+    test_log_move_err = move_err;
+    test_log_vm = vm;
+    test_log_current_power = current_power;
+    test_log_gyro_err = gyro_err;
+    test_log_vg = vg;
+    test_log_turnpower = turnpower;
 
     //到达目标判断
     if (fabs(enc)-fabs(menc)<2 && fabs(vm) < 1)//距离误差<2度 且 速度变化<1
@@ -1784,69 +1800,117 @@ int AutoScreen()
 bool test_log_active = false; //日志任务运行标志
 
 /**
- * @brief 电机速度日志任务
+ * @brief 统一测试日志任务(10列,二维数组格式)
  * @return 0
- * 每50ms输出一次6个底盘电机速度绝对值的均值(RPM)到电脑终端
+ * 每50ms采集一组数据,以二维数组格式连续输出:
+ *   {{time_ms,menc,move_err,vm,current_power,gyro_err,vg,turnpower,left_avg,right_avg},{...},...}
+ * 
+ * 其中 menc~turnpower 来自Run_gyro写入的全局变量,
+ * left_avg/right_avg 来自电机实时速度采样
  */
 int test_log_task_fn()
 {
   float start_time = Brain.timer(timeUnits::msec);
-  printf("time_ms, avg_abs_rpm\n");
+  bool first = true;
+  printf("{");
   while(test_log_active)
   {
     float t = Brain.timer(timeUnits::msec) - start_time;
-    float l1 = fabs(LeftRun_1.velocity(velocityUnits::rpm));
-    float l2 = fabs(LeftRun_2.velocity(velocityUnits::rpm));
-    float l3 = fabs(LeftRun_3.velocity(velocityUnits::rpm));
-    float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
-    float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
-    float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
-    float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
-    printf("%.0f, %.1f\n", t, avg_abs_rpm);
+
+    // 从电机实时采样左右侧均速(取绝对值)
+    float left_avg  = (fabs(LeftRun_1.velocity(velocityUnits::rpm))
+                     + fabs(LeftRun_2.velocity(velocityUnits::rpm))
+                     + fabs(LeftRun_3.velocity(velocityUnits::rpm))) / 3.0;
+    float right_avg = (fabs(RightRun_1.velocity(velocityUnits::rpm))
+                     + fabs(RightRun_2.velocity(velocityUnits::rpm))
+                     + fabs(RightRun_3.velocity(velocityUnits::rpm))) / 3.0;
+
+    if(!first) printf(",");
+    printf("{%.0f,%.1f,%.1f,%.2f,%.1f,%.2f,%.3f,%.1f,%.1f,%.1f}",
+           t,
+           test_log_menc,
+           test_log_move_err,
+           test_log_vm,
+           test_log_current_power,
+           test_log_gyro_err,
+           test_log_vg,
+           test_log_turnpower,
+           left_avg,
+           right_avg);
+    first = false;
+
     vex::task::sleep(50);
   }
+  printf("}\n");
   return 0;
 }
 
 task test_log_task_handle;
 
 /**
- * @brief 直线行驶测试函数(含实时速度日志)
+ * @brief 直线行驶测试函数(含统一10列日志)
  * @param enc 目标编码器值(度), 正值前进, 负值后退
+ * @param g 目标角度(默认0, 即保持当前朝向)
  * 
- * 调用Run_gyro行驶,同时在后台任务中每50ms
- * 将6个底盘电机速度绝对值的均值(RPM)通过printf输出到电脑终端
- * 格式: CSV (time_ms, avg_abs_rpm)
+ * 调用Run_gyro行驶,同时在后台每50ms输出:
+ *   time_ms, menc, move_err, vm, current_power, gyro_err, vg, turnpower, left_avg, right_avg
  */
-void test_straight(double enc)
+void test_straight(double enc, float g=0)
 {
-  //启动速度日志任务
+  //初始化坐标系:当前朝向为0°
+  now = 0;
+  Start = Gyro.rotation(degrees);
+
+  //清零全局日志变量
+  test_log_menc = 0;
+  test_log_move_err = 0;
+  test_log_vm = 0;
+  test_log_current_power = 0;
+  test_log_gyro_err = 0;
+  test_log_vg = 0;
+  test_log_turnpower = 0;
+
+  //打印测试类型标识
+  printf("test_straight\n");
+
+  //启动日志任务
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
-  
-  //执行直线行驶(g使用默认值now)
-  Run_gyro(enc, 100, now);
-  
+
+  //执行直线行驶
+  Run_gyro(enc, 100, g);
+
   //Run_gyro结束后继续记录1秒,观察完整减速过程
-  //vex::task::sleep(1000);
-  
+  vex::task::sleep(1000);
+
   //停止日志任务
   test_log_active = false;
   vex::task::sleep(100); //等待最后一次日志输出完成
-  printf("--- test_straight complete, enc=%.1f ---\n", enc);
+  printf("--- test_straight complete, enc=%.1f, g=%.1f ---\n", enc, g);
 }
 
 /**
- * @brief 转向测试函数(含实时速度日志)
+ * @brief 转向测试函数(含统一10列日志)
  * @param angle 目标角度
  * 
- * 调用Turn_Gyro转向,同时在后台任务中每50ms
- * 将6个底盘电机速度绝对值的均值(RPM)通过printf输出到电脑终端
- * 格式: CSV (time_ms, avg_abs_rpm)
+ * 调用Turn_Gyro转向,同时在后台输出日志
+ * 注意: 转向时menc/move_err等移动列不会更新,仅left_avg/right_avg有意义
  */
 void test_turn(float angle)
 {
-  //启动速度日志任务
+  //清零全局日志变量
+  test_log_menc = 0;
+  test_log_move_err = 0;
+  test_log_vm = 0;
+  test_log_current_power = 0;
+  test_log_gyro_err = 0;
+  test_log_vg = 0;
+  test_log_turnpower = 0;
+
+  //打印测试类型标识
+  printf("test_turn\n");
+
+  //启动日志任务
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
   
@@ -1859,75 +1923,6 @@ void test_turn(float angle)
   printf("--- test_turn complete, angle=%.1f ---\n", angle);
 }
 
-float test_gyro_target_heading = 0; //目标航向角(经Side/Start变换后),供日志任务读取
-
-/**
- * @brief 陀螺仪纠偏测试 - 日志任务
- * @return 0
- * 每50ms输出: time_ms, heading_err, left_avg, right_avg, lr_diff, rpm_diff
- * heading_err = 目标航向 - 当前航向 (正=偏左需右修, 负=偏右需左修)
- * lr_diff = 左侧均速 - 右侧均速 (反映turnpower纠偏效果)
- * rpm_diff = target_rpm - actual_rpm (正=实际转速不足, 负=实际转速过快)
- */
-int test_gyro_log_fn()
-{
-  float start_time = Brain.timer(timeUnits::msec);
-  printf("time_ms, heading_err, left_avg, right_avg, lr_diff, rpm_diff\n");
-  while(test_log_active)
-  {
-    float t = Brain.timer(timeUnits::msec) - start_time;
-    float heading_err = test_gyro_target_heading - Gyro.rotation(degrees);
-
-    float l1 = LeftRun_1.velocity(velocityUnits::rpm);
-    float l2 = LeftRun_2.velocity(velocityUnits::rpm);
-    float l3 = LeftRun_3.velocity(velocityUnits::rpm);
-    float r1 = RightRun_1.velocity(velocityUnits::rpm);
-    float r2 = RightRun_2.velocity(velocityUnits::rpm);
-    float r3 = RightRun_3.velocity(velocityUnits::rpm);
-
-    float left_avg  = (l1 + l2 + l3) / 3.0;
-    float right_avg = (r1 + r2 + r3) / 3.0;
-    float lr_diff   = left_avg - right_avg;
-
-    printf("%.0f, %.2f, %.1f, %.1f, %.1f, %.1f\n", t, heading_err, left_avg, right_avg, lr_diff, test_gyro_rpm_diff);
-    vex::task::sleep(50);
-  }
-  return 0;
-}
-
-/**
- * @brief 陀螺仪纠偏测试函数(用于调试gyro_kp/gyro_kd)
- * @param enc 目标编码器值(度), 正值前进, 负值后退
- * @param g 目标角度(默认now)
- * 
- * 调用Run_gyro行驶,同时在后台任务中每50ms输出:
- *   heading_err(航向误差), left_avg/right_avg(左右均速), lr_diff(左右速差), rpm_diff(目标与实际转速差)
- * 用于观察陀螺仪PD纠偏的实时效果
- */
-void test_gyro(double enc, float g=0)
-{
-  //初始化坐标系:当前朝向为0°
-  now = 0;
-  Start = Gyro.rotation(degrees);
-
-  //计算变换后的目标航向,供日志任务读取
-  test_gyro_target_heading = Side * g + Start;
-
-  //启动陀螺仪日志任务
-  test_log_active = true;
-  test_log_task_handle = task(test_gyro_log_fn);
-
-  //执行直线行驶
-  Run_gyro(enc, 100, g);
-
-  //Run_gyro结束后继续记录1秒,观察完整减速过程
-  vex::task::sleep(1000);
-
-  //停止日志任务
-  test_log_active = false;
-  vex::task::sleep(100); //等待最后一次日志输出完成
-  printf("--- test_gyro complete, enc=%.1f, g=%.1f ---\n", enc, g);
-}
 
 float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
 
