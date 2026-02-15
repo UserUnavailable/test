@@ -1159,15 +1159,15 @@ void Turn_Gyro(float target)
    target=Side*target+Start; //根据场地方向调整目标角度
    float error = target - Gyro.rotation(degrees) ;//与目标角度距离
    
-   //PID参数(去掉跳变式自适应,改为统一参数,避免30°处功率突变)
-   float kp = 2.5;    //比例系数(降低,减少满功率时间,平滑减速)
-   float ki = 35;     //积分系数
-   float kd = 40;     //微分系数(略增,增强刹车阻尼)
+   //自适应PID参数
+   float kp =fabs(error)>30&&fabs(error)<120?3.2:(fabs(error)<30?4:3);//根据误差动态调整kp
+   float ki =35;   //积分系数
+   float kd =fabs(error)>30&&fabs(error)<120?42:(fabs(error)<30?65:30); //自适应kd
    float irange=3.0;  //积分限幅
    float istart=60;   //积分启动阈值
    float dtol = 0.2;  //停止速度阈值
-   float errortolerance = 1.5; //角度误差容忍度(收紧,提高精度)
-   float lim = 80;    //功率限幅(降低,减少惯性积累)
+   float errortolerance = 2; //角度误差容忍度
+   float lim =100;    //功率限幅
    
    float lasterror;   //上一次角度误差
    float V= 0;        //角速度(微分项)
@@ -1186,10 +1186,10 @@ void Turn_Gyro(float target)
     V = error - lasterror; //计算角速度(微分)
     lasterror = error;
     
-    //提前退出判断:角度误差小且两侧电机都基本停止
-    if (fabs(error)<=3)
+    //提前退出判断:角度误差小且电机基本停止
+    if (fabs(error)<=1)
     {
-      if(fabs(RightRun_1.velocity(velocityUnits::rpm))<5 && fabs(LeftRun_1.velocity(velocityUnits::rpm))<5){break;}
+      if(fabs(RightRun_1.velocity(velocityUnits::rpm))<5||fabs(LeftRun_1.velocity(velocityUnits::rpm))<5){break;}
     }
     
     //到达判断:误差和速度都在容忍范围内,或超时
@@ -2004,7 +2004,7 @@ int test_log_task_fn()
     }
 
     test_log_count++;
-    vex::task::sleep(100); // 100ms采样间隔
+    vex::task::sleep(test_log_type == 1 ? 20 : 100); // turn模式20ms, 其他100ms
   }
   return 0;
 }
@@ -2134,6 +2134,9 @@ void test_turn(float angle)
   
   //执行PID转向
   Turn_Gyro(angle);
+
+  //Turn_Gyro结束后继续记录0.5秒,确保录到到位过程
+  //vex::task::sleep(500);
   
   //停止采集任务
   test_log_active = false;
