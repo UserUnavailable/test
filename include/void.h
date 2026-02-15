@@ -22,7 +22,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 全局变量定义
 ///////////////////////////////////////////////////////////////////////////////
-float motor_min_speed = 26; //电机最小驱动功率(自动阶段统一使用)
+float motor_min_speed = 20; //电机最小驱动功率(自动阶段统一使用)
 
 //int auto_color_ctrl=0;//自动颜色控制
 extern int auto_color_ctrl=0; //自动颜色控制开关: 0-关闭, 1-开启
@@ -678,6 +678,9 @@ float test_log_current_power = 0; //实际输出功率(减速后)
 float test_log_gyro_err = 0;      //航向误差
 float test_log_vg = 0;            //航向变化率
 float test_log_turnpower = 0;     //转向补偿输出
+float test_log_last_move_error = 0; //上一次距离误差
+float test_log_delta_move_err = 0;  //move_err - move_lasterror(未除dt的原始差值)
+float test_log_dt = 0;              //循环dt(秒)
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -708,7 +711,7 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
   float turnpower;//转向补偿功率
   float movepower;//移动补偿功率
   float gyro_lasterror;//上一次角度误差
-  float move_lasterror;//上一次距离误差
+  float move_lasterror = 0;//上一次距离误差
   float move_err = fabs(enc) - fabs(menc);//编码器当前与目标差值
   float gyro_err = g - Gyro.rotation(degrees) ;//陀螺仪当前与目标差值
 
@@ -728,7 +731,6 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
     vg = gyro_err - gyro_lasterror;  //计算角度变化率
     vm = move_err-move_lasterror;    //计算距离变化率
     gyro_lasterror = gyro_err;
-    move_lasterror = move_err;
     
     //PD控制计算转向补偿
     turnpower = gyro_kp*gyro_err + gyro_kd * vg;
@@ -755,7 +757,11 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
     test_log_gyro_err = gyro_err;
     test_log_vg = vg;
     test_log_turnpower = turnpower;
+    test_log_last_move_error = move_lasterror;
+    test_log_delta_move_err = vm; // Run_gyro中vm即move_err-move_lasterror(无dt归一化)
+    test_log_dt = 0; // Run_gyro无动态dt
 
+    move_lasterror = move_err;
     //到达目标判断
     if (fabs(enc)-fabs(menc)<2 && fabs(vm) < 1)//距离误差<2度 且 速度变化<1
     {
@@ -766,6 +772,99 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
     //应用补偿后的功率到左右电机
     Run_Ctrl((sgn(enc)*final_power)+ turnpower,-(sgn(enc)*final_power) +turnpower);
     }
+  }
+  RunStop(brake);
+}
+
+/**
+ * @brief 陀螺仪辅助直线行驶(P控制)
+ * @param enc 目标编码器值(度), 正值前进, 负值后退
+ * @param g 目标角度
+ * 使用陀螺仪实时纠偏,保证直线行驶精度
+ * 全程使用P控制自动计算行驶功率
+ */
+void Run_gyro_new(double enc, float g=now)
+{
+  //enc=enc*3;
+  g=Side*g+Start; //根据场地方向调整目标角度
+  LeftRun_1.resetPosition();
+  RightRun_1.resetPosition();
+  
+  //PD参数
+  //float gyro_kp = 1;
+  float gyro_kp = 0;    //角度比例系数1.5
+  float gyro_kd = 0;  //角度微分系数 (单位现在是°/s, 旧12÷100)0.12
+  float move_kp = 0.3;   //距离比例系数 500:0.3 1000:0.3 1500:0.3
+  float move_kd = fabs(enc) <= 500 ? 0.03 : (fabs(enc) <= 1000 ? 0.04 : 0.05); // 距离微分系数 (单位°/s, 接近目标时vm为负→减速) 500:0.03 1000:0.04 1500:0.05
+
+  float menc=0;//左右轮编码器平均值
+  float vm = 0;//线速度差
+  float turnpower;//转向补偿功率
+  float movepower;//移动补偿功率
+  float move_err = fabs(enc) - fabs(menc);//编码器当前与目标差值
+  float move_lasterror = move_err;//上一次距离误差(初始化为初始误差)
+  float gyro_lasterror = 0;//上一次角度误差
+  float gyro_err = g - Gyro.rotation(degrees) ;//陀螺仪当前与目标差值
+
+  //int timeout =  enc < 300 ? 500 : enc * 1.5;
+  float Timer=Brain.timer(timeUnits::sec);
+  float timeout=fabs(enc) / 200.0 + 1.0; //超时保护
+  float last_time = Timer; //动态dt: 记录上一次循环时间
+  
+	while((Brain.timer(timeUnits::sec)-Timer)<=timeout+0.5)
+  {
+    //动态计算dt: 用实际经过时间而非固定值
+    float current_time = Brain.timer(timeUnits::sec);
+    float dt = current_time - last_time;
+    if (dt < 0.002) {          //不足2ms就跳过, 防止dt过小导致vm噪声爆炸
+      vex::task::sleep(1);     //让出CPU, 避免空转
+      continue;
+    }
+    last_time = current_time;
+
+    //实时更新编码器和陀螺仪数据
+    menc = (fabs(LeftRun_1.position(rotationUnits::deg))+ fabs(RightRun_1.position(rotationUnits::deg)))/2;
+    move_err = fabs(enc) - fabs(menc);
+    gyro_err = g - Gyro.rotation(degrees) ;
+
+    //归一化为每秒变化率(÷dt), 让kd的单位(°/s)与kp(°)量级匹配
+    vm = (move_err - move_lasterror) / dt;    //距离变化率(°/s), 接近目标时为负
+    
+    
+    //PD控制计算转向补偿
+    float vg = (gyro_err - gyro_lasterror) / dt;  //角速度(°/s)
+    turnpower = gyro_kp*gyro_err + gyro_kd*vg;
+    gyro_lasterror = gyro_err;
+
+    //PD控制计算行驶功率
+    movepower = move_kp * move_err + move_kd * vm;
+    if(movepower > 100) movepower = 100;              // 最大速度限制
+    if(movepower < motor_min_speed && fabs(enc) > fabs(menc)) movepower = motor_min_speed; // 最小速度限制
+    double final_power = movepower;
+
+    // 写入全局变量供测试日志读取
+    test_log_menc = menc;
+    test_log_move_err = move_err;
+    test_log_vm = vm;
+    test_log_current_power = final_power;
+    test_log_gyro_err = gyro_err;
+    test_log_vg = vg;
+    test_log_turnpower = turnpower;
+    test_log_last_move_error = move_lasterror;
+    test_log_delta_move_err = move_err - move_lasterror;
+    test_log_dt = dt;
+    move_lasterror = move_err;
+    //到达目标判断: 距离误差<2度 且 速度<100°/s (归一化后的vm单位是°/s)
+    if (fabs(enc)-fabs(menc)<2 && fabs(vm) < 100)
+    {
+      break;
+    }
+    else
+    {
+    //应用补偿后的功率到左右电机
+    Run_Ctrl((sgn(enc)*final_power)+ turnpower,-(sgn(enc)*final_power) +turnpower);
+    }
+    vex::task::sleep(10); 
   }
   RunStop(brake);
 }
@@ -1799,53 +1898,147 @@ int AutoScreen()
 ///////////////////////////////////////////////////////////////////////////////////
 bool test_log_active = false; //日志任务运行标志
 
+// 测试类型枚举: 0=straight, 1=turn, 2=minspeed
+int test_log_type = 0;
+
+float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
+
+// 日志缓冲区结构与存储(先采集到内存,跑完后一次性输出)
+struct TestLogEntry {
+    float time_s;
+    float menc;
+    float move_err;
+    float vm;
+    float current_power;
+    float gyro_err;
+    float vg;
+    float turnpower;
+    float left_avg;
+    float right_avg;
+    float last_move_error;  // 上一次距离误差
+    float delta_move_err;   // move_err - move_lasterror(原始差值)
+    float dt;               // 循环dt(秒)
+    float power;  // minspeed专用
+    float diff;   // minspeed专用
+};
+
+const int TEST_LOG_MAX = 2000; // 最大日志条目数
+TestLogEntry test_log_buf[TEST_LOG_MAX];
+int test_log_count = 0; // 当前已存条目数
+
 /**
- * @brief 统一测试日志任务(10列,二维数组格式)
+ * @brief 统一测试日志任务 — 仅采集数据到缓冲区,不做串口输出
  * @return 0
- * 每50ms采集一组数据,以二维数组格式连续输出:
- *   {{time_ms,menc,move_err,vm,current_power,gyro_err,vg,turnpower,left_avg,right_avg},{...},...}
  * 
- * 其中 menc~turnpower 来自Run_gyro写入的全局变量,
- * left_avg/right_avg 来自电机实时速度采样
+ * test_log_type == 0 (test_straight):
+ *   13列: {time_s, menc, move_err, last_move_error, delta_move_err, vm, dt, current_power, gyro_err, vg, turnpower, left_avg, right_avg}
+ * 
+ * test_log_type == 1 (test_turn):
+ *   6列: {time_s, gyro_err, vg, turnpower, left_avg, right_avg}
+ * 
+ * test_log_type == 2 (test_minspeed):
+ *   3列: {time_s, power, diff}
  */
 int test_log_task_fn()
 {
   float start_time = Brain.timer(timeUnits::msec);
-  bool first = true;
-  printf("{");
-  while(test_log_active)
+  test_log_count = 0; // 清零计数器
+
+  while(test_log_active && test_log_count < TEST_LOG_MAX)
   {
-    float t = Brain.timer(timeUnits::msec) - start_time;
-
     // 从电机实时采样左右侧均速(取绝对值)
-    float left_avg  = (fabs(LeftRun_1.velocity(velocityUnits::rpm))
-                     + fabs(LeftRun_2.velocity(velocityUnits::rpm))
-                     + fabs(LeftRun_3.velocity(velocityUnits::rpm))) / 3.0;
-    float right_avg = (fabs(RightRun_1.velocity(velocityUnits::rpm))
-                     + fabs(RightRun_2.velocity(velocityUnits::rpm))
-                     + fabs(RightRun_3.velocity(velocityUnits::rpm))) / 3.0;
+    float l1 = fabs(LeftRun_1.velocity(velocityUnits::rpm));
+    float l2 = fabs(LeftRun_2.velocity(velocityUnits::rpm));
+    float l3 = fabs(LeftRun_3.velocity(velocityUnits::rpm));
+    float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
+    float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
+    float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
 
-    if(!first) printf(",");
-    printf("{%.0f,%.1f,%.1f,%.2f,%.1f,%.2f,%.3f,%.1f,%.1f,%.1f}",
-           t,
-           test_log_menc,
-           test_log_move_err,
-           test_log_vm,
-           test_log_current_power,
-           test_log_gyro_err,
-           test_log_vg,
-           test_log_turnpower,
-           left_avg,
-           right_avg);
-    first = false;
+    float t = (Brain.timer(timeUnits::msec) - start_time) / 1000.0;
+    TestLogEntry &e = test_log_buf[test_log_count];
+    e.time_s = t;
+    e.left_avg  = (l1 + l2 + l3) / 3.0;
+    e.right_avg = (r1 + r2 + r3) / 3.0;
 
-    vex::task::sleep(50);
+    if(test_log_type == 0) // test_straight: 存储全部13列
+    {
+      e.menc            = test_log_menc;
+      e.move_err        = test_log_move_err;
+      e.last_move_error = test_log_last_move_error;
+      e.delta_move_err  = test_log_delta_move_err;
+      e.vm              = test_log_vm;
+      e.dt              = test_log_dt;
+      e.current_power   = test_log_current_power;
+      e.gyro_err        = test_log_gyro_err;
+      e.vg              = test_log_vg;
+      e.turnpower       = test_log_turnpower;
+    }
+    else if(test_log_type == 1) // test_turn: 存储转向相关列
+    {
+      e.gyro_err  = test_log_gyro_err;
+      e.vg        = test_log_vg;
+      e.turnpower = test_log_turnpower;
+    }
+    else if(test_log_type == 2) // test_minspeed: 存储功率-速度差
+    {
+      float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
+      float theoretical_rpm = 200.0 * test_minspeed_power / 100.0;
+      e.power = test_minspeed_power;
+      e.diff  = avg_abs_rpm - theoretical_rpm;
+    }
+
+    test_log_count++;
+    vex::task::sleep(100); // 100ms采样间隔
   }
-  printf("}\n");
   return 0;
 }
 
 task test_log_task_handle;
+
+/**
+ * @brief 将缓冲区中的日志数据通过串口一次性输出(跑完后调用)
+ */
+void test_log_dump()
+{
+  // 输出CSV表头
+  vex::task::sleep(50); // 确保前面的printf(如test类型标识)已发送完毕
+  if(test_log_type == 0)
+    printf("time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg\n");
+  else if(test_log_type == 1)
+    printf("time_s,gyro_err,vg,turnpower,left_avg,right_avg\n");
+  else if(test_log_type == 2)
+    printf("time_s,power,diff\n");
+  vex::task::sleep(30); // 等待表头发送完毕再开始数据行
+
+  // 逐行输出所有缓冲数据
+  for(int i = 0; i < test_log_count; i++)
+  {
+    TestLogEntry &e = test_log_buf[i];
+    if(test_log_type == 0)
+    {
+      printf("%.3f,%.1f,%.1f,%.1f,%.2f,%.2f,%.4f,%.1f,%.2f,%.3f,%.1f,%.1f,%.1f\n",
+             e.time_s, e.menc, e.move_err, e.last_move_error, e.delta_move_err,
+             e.vm, e.dt, e.current_power, e.gyro_err, e.vg, e.turnpower,
+             e.left_avg, e.right_avg);
+    }
+    else if(test_log_type == 1)
+    {
+      printf("%.3f,%.2f,%.3f,%.1f,%.1f,%.1f\n",
+             e.time_s, e.gyro_err, e.vg, e.turnpower, e.left_avg, e.right_avg);
+    }
+    else if(test_log_type == 2)
+    {
+      printf("%.2f,%.0f,%.1f\n", e.time_s, e.power, e.diff);
+    }
+    vex::task::sleep(15); // 每行之间延迟,防止V5 USB串口缓冲区溢出
+  }
+  // 最后一行需要额外等待: 85字节跨2个USB包(64B),第2包需要时间刷出
+  vex::task::sleep(300);
+  printf("\n"); // 空行推动USB缓冲区刷新
+  vex::task::sleep(100);
+  printf("--- log end (total %d samples) ---\n", test_log_count);
+  vex::task::sleep(100); // 等待串口缓冲区刷新
+}
 
 /**
  * @brief 直线行驶测试函数(含统一10列日志)
@@ -1853,7 +2046,7 @@ task test_log_task_handle;
  * @param g 目标角度(默认0, 即保持当前朝向)
  * 
  * 调用Run_gyro行驶,同时在后台每50ms输出:
- *   time_ms, menc, move_err, vm, current_power, gyro_err, vg, turnpower, left_avg, right_avg
+ *   time_s, menc, move_err, last_move_error, delta_move_err, vm, dt, current_power, gyro_err, vg, turnpower, left_avg, right_avg
  */
 void test_straight(double enc, float g=0)
 {
@@ -1869,32 +2062,40 @@ void test_straight(double enc, float g=0)
   test_log_gyro_err = 0;
   test_log_vg = 0;
   test_log_turnpower = 0;
+  test_log_last_move_error = 0;
+  test_log_delta_move_err = 0;
+  test_log_dt = 0;
 
   //打印测试类型标识
-  printf("test_straight\n");
+  printf("test_straight_v2\n"); //版本标记: v2=归一化dt版
 
   //启动日志任务
+  test_log_type = 0; // straight模式
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
 
   //执行直线行驶
-  Run_gyro(enc, 100, g);
+  Run_gyro_new(enc);
 
   //Run_gyro结束后继续记录1秒,观察完整减速过程
-  vex::task::sleep(1000);
+  //vex::task::sleep(1000);
 
-  //停止日志任务
+  //停止采集任务
   test_log_active = false;
-  vex::task::sleep(100); //等待最后一次日志输出完成
+  vex::task::sleep(100); //等待采集任务退出
+
+  //一次性输出所有缓冲数据
+  test_log_dump();
   printf("--- test_straight complete, enc=%.1f, g=%.1f ---\n", enc, g);
+  vex::task::sleep(200); // 确保complete信息通过串口发送完毕
 }
 
 /**
- * @brief 转向测试函数(含统一10列日志)
+ * @brief 转向测试函数(含转向日志)
  * @param angle 目标角度
  * 
  * 调用Turn_Gyro转向,同时在后台输出日志
- * 注意: 转向时menc/move_err等移动列不会更新,仅left_avg/right_avg有意义
+ * 日志仅保留转向相关列: time, gyro_err, vg, turnpower, left_avg, right_avg
  */
 void test_turn(float angle)
 {
@@ -1911,69 +2112,41 @@ void test_turn(float angle)
   printf("test_turn\n");
 
   //启动日志任务
+  test_log_type = 1; // turn模式
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
   
   //执行PID转向
   Turn_Gyro(angle);
   
-  //停止日志任务
+  //停止采集任务
   test_log_active = false;
-  vex::task::sleep(100); //等待最后一次日志输出完成
+  vex::task::sleep(100); //等待采集任务退出
+
+  //一次性输出所有缓冲数据
+  test_log_dump();
   printf("--- test_turn complete, angle=%.1f ---\n", angle);
+  vex::task::sleep(200); // 确保complete信息通过串口发送完毕
 }
 
-
-float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
-
-/**
- * @brief 最小驱动功率测试 - 日志任务
- * @return 0
- * 每50ms采集{min, power, diff},不换行,以二维数组格式连续输出:
- * {{min,power,diff},{min,power,diff},...}
- */
-int test_minspeed_log_fn()
-{
-  float start_time = Brain.timer(timeUnits::msec);
-  bool first = true;
-  printf("{");
-  while(test_log_active)
-  {
-    float t = (Brain.timer(timeUnits::msec) - start_time) / 1000.0; // 单位：分钟
-    float l1 = fabs(LeftRun_1.velocity(velocityUnits::rpm));
-    float l2 = fabs(LeftRun_2.velocity(velocityUnits::rpm));
-    float l3 = fabs(LeftRun_3.velocity(velocityUnits::rpm));
-    float r1 = fabs(RightRun_1.velocity(velocityUnits::rpm));
-    float r2 = fabs(RightRun_2.velocity(velocityUnits::rpm));
-    float r3 = fabs(RightRun_3.velocity(velocityUnits::rpm));
-    float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
-    //float avg_abs_rpm = r3;
-    float theoretical_rpm = 200.0 * test_minspeed_power / 100.0;
-    float diff = avg_abs_rpm - theoretical_rpm;
-
-    if(!first) printf(",");
-    printf("{%.2f,%.0f,%.1f}", t, test_minspeed_power, diff);
-    first = false;
-
-    vex::task::sleep(50);
-  }
-  printf("}\n");
-  return 0;
-}
 
 /**
  * @brief 最小驱动功率测试函数
  * 
  * 从0%到30%功率,每2%递增,交替前后方向驱动机器人
  * 每次驱动5秒,停止2秒,同时后台日志任务每50ms采集数据
- * 以二维数组格式输出: {{min,diff},{min,diff},...}
+ * 以二维数组格式输出: {{time_s,power,diff},...}
  */
 void test_minspeed()
 {
+  //打印测试类型标识
+  printf("test_minspeed\n");
+
   //启动日志任务
+  test_log_type = 2; // minspeed模式
   test_log_active = true;
   test_minspeed_power = 0;
-  test_log_task_handle = task(test_minspeed_log_fn);
+  test_log_task_handle = task(test_log_task_fn);
 
   bool forward = true; //第一次往前走
 
@@ -1997,9 +2170,13 @@ void test_minspeed()
     forward = !forward;
   }
 
-  //停止日志任务
+  //停止采集任务
   test_log_active = false;
-  vex::task::sleep(100);
+  vex::task::sleep(100); //等待采集任务退出
+
+  //一次性输出所有缓冲数据
+  test_log_dump();
   printf("--- test_minspeed complete ---\n");
+  vex::task::sleep(200); // 确保complete信息通过串口发送完毕
 }
 ///////////////////////////////////////////////////////////////////////////////
