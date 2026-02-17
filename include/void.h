@@ -2019,17 +2019,23 @@ task test_log_task_handle;
  */
 void test_log_dump()
 {
+  // USB CDC 防丢策略: 60ms行间延迟 + 每8行300ms排空暂停
+  // V5 USB包=64B, 内部TX buffer≈512B, 无流控, printf溢出时静默丢弃
+  const int LINE_DELAY  = 60;   // 每行后等待(ms), 留够单USB包发送时间
+  const int CHUNK_SIZE  = 8;    // 每N行做一次长暂停
+  const int CHUNK_PAUSE = 300;  // 长暂停(ms), 让USB buffer彻底排空
+
   // 输出CSV表头
-  vex::task::sleep(50); // 确保前面的printf(如test类型标识)已发送完毕
+  vex::task::sleep(100); // 确保前面的printf(如test类型标识)已发送完毕
   if(test_log_type == 0)
     printf("time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg\n");
   else if(test_log_type == 1)
     printf("time_s,gyro_err,vg,turnpower,left_avg,right_avg\n");
   else if(test_log_type == 2)
     printf("time_s,power,diff\n");
-  vex::task::sleep(30); // 等待表头发送完毕再开始数据行
+  vex::task::sleep(LINE_DELAY);
 
-  // 逐行输出所有缓冲数据
+  // 逐行输出所有缓冲数据, 分块限速
   for(int i = 0; i < test_log_count; i++)
   {
     TestLogEntry &e = test_log_buf[i];
@@ -2049,14 +2055,20 @@ void test_log_dump()
     {
       printf("%.2f,%.0f,%.1f\n", e.time_s, e.power, e.diff);
     }
-    vex::task::sleep(30); // 每行之间延迟,防止V5 USB串口缓冲区溢出(13列≈85B跨2个USB包,需30ms)
+
+    // 分块限速: 每CHUNK_SIZE行做一次长暂停让USB buffer排空
+    if((i + 1) % CHUNK_SIZE == 0)
+      vex::task::sleep(CHUNK_PAUSE);
+    else
+      vex::task::sleep(LINE_DELAY);
   }
-  // 最后一行需要额外等待: 85字节跨2个USB包(64B),第2包需要时间刷出
-  vex::task::sleep(300);
-  printf("\n"); // 空行推动USB缓冲区刷新
-  vex::task::sleep(100);
+
+  // 尾部: 等USB buffer完全排空后再输出footer
+  vex::task::sleep(500);
+  printf("\n");
+  vex::task::sleep(LINE_DELAY);
   printf("--- log end (total %d samples) ---\n", test_log_count);
-  vex::task::sleep(100); // 等待串口缓冲区刷新
+  vex::task::sleep(200);
 }
 
 /**
@@ -2106,7 +2118,7 @@ void test_straight(double enc, float g=0)
   //一次性输出所有缓冲数据
   test_log_dump();
   printf("--- test_straight complete, enc=%.1f, g=%.1f ---\n", enc, g);
-  vex::task::sleep(200); // 确保complete信息通过串口发送完毕
+  vex::task::sleep(500); // 块间间隔: 确保complete信息发完且USB buffer排空后再进入下一个test
 }
 
 /**
@@ -2148,7 +2160,7 @@ void test_turn(float angle)
   //一次性输出所有缓冲数据
   test_log_dump();
   printf("--- test_turn complete, angle=%.1f ---\n", angle);
-  vex::task::sleep(200); // 确保complete信息通过串口发送完毕
+  vex::task::sleep(500); // 块间间隔: 确保complete信息发完且USB buffer排空后再进入下一个test
 }
 
 
@@ -2199,7 +2211,7 @@ void test_minspeed()
   //一次性输出所有缓冲数据
   test_log_dump();
   printf("--- test_minspeed complete ---\n");
-  vex::task::sleep(200); // 确保complete信息通过串口发送完毕
+  vex::task::sleep(500); // 块间间隔: 确保complete信息发完且USB buffer排空后再进入下一个test
 }
 
 /**
@@ -2283,6 +2295,6 @@ void test_gyro_pd(float gyro_kp, float gyro_kd)
   vex::task::sleep(100);
   test_log_dump();
   printf("--- test_gyro_pd complete, kp=%.2f, kd=%.3f ---\n", gyro_kp, gyro_kd);
-  vex::task::sleep(200);
+  vex::task::sleep(500); // 块间间隔: 确保complete信息发完且USB buffer排空后再进入下一个test
 }
 ///////////////////////////////////////////////////////////////////////////////

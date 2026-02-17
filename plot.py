@@ -122,6 +122,37 @@ def _is_csv_data(line: str, ncols: int) -> bool:
         return False
 
 
+import re
+_RE_TOTAL_SAMPLES = re.compile(r"total\s+(\d+)\s+samples")
+
+
+def _try_salvage_csv(line: str, ncols: int) -> str | None:
+    """Try to extract valid CSV data from a corrupted/concatenated line.
+
+    Handles cases like:
+      '0.460,17.88,-1.791,-11.0,10.3,5.5d (total 44 samples) ---'
+    where a data row was concatenated with footer text due to USB buffer loss.
+    """
+    parts = line.split(",")
+    if len(parts) < ncols:
+        return None
+    # Take the first ncols parts; the last one may have trailing garbage
+    candidate = parts[:ncols]
+    # Strip non-numeric trailing chars from the last field (e.g. '5.5d (total...')
+    last = candidate[-1]
+    m = re.match(r"^([+-]?\d+\.?\d*)", last)
+    if m:
+        candidate[-1] = m.group(1)
+    else:
+        return None
+    # Validate all fields are numeric
+    try:
+        [float(p) for p in candidate]
+        return ",".join(candidate)
+    except ValueError:
+        return None
+
+
 def parse_blocks(text: str) -> list[TestBlock]:
     """Extract all test data blocks from raw terminal text."""
     blocks: list[TestBlock] = []
@@ -151,24 +182,50 @@ def parse_blocks(text: str) -> list[TestBlock]:
 
         # Collect data rows
         csv_rows: list[str] = []
+        corrupted = False
         while i < len(lines):
             row = lines[i].strip()
             if not row or row.startswith("---") or row in TEST_HEADERS:
                 break
             if _is_csv_data(row, ncols):
                 csv_rows.append(row)
+            else:
+                # Detect line concatenation (data + footer merged into one line)
+                salvaged = _try_salvage_csv(row, ncols)
+                if salvaged:
+                    csv_rows.append(salvaged)
+                    corrupted = True
+                    print(f"  [WARN] Line {i+1}: USB data corruption detected, salvaged partial row")
+                    print(f"         Raw: {row[:80]}{'...' if len(row)>80 else ''}")
             i += 1
 
-        # Collect meta (--- xxx complete ---)
+        # Collect meta (--- xxx complete/log end ---)
         meta = ""
+        expected_samples = -1
         while i < len(lines):
             row = lines[i].strip()
             if row.startswith("---"):
                 if "complete" in row:
                     meta = row
+                m = _RE_TOTAL_SAMPLES.search(row)
+                if m:
+                    expected_samples = int(m.group(1))
                 i += 1
                 continue
+            # Also check non-"---" lines for embedded footer (from concatenation)
+            if "total" in row and "samples" in row:
+                m = _RE_TOTAL_SAMPLES.search(row)
+                if m:
+                    expected_samples = int(m.group(1))
             break
+
+        # Also scan already-consumed corrupted lines for embedded sample count
+        if expected_samples < 0 and corrupted:
+            for row in lines[max(0, i-5):i]:
+                m = _RE_TOTAL_SAMPLES.search(row)
+                if m:
+                    expected_samples = int(m.group(1))
+                    break
 
         # Build DataFrame
         if csv_rows:
@@ -176,6 +233,15 @@ def parse_blocks(text: str) -> list[TestBlock]:
             try:
                 df = pd.read_csv(io.StringIO(csv_text))
                 blocks.append(TestBlock(test_type=test_type, df=df, meta=meta))
+
+                # Validate sample count
+                actual = len(df)
+                if expected_samples > 0 and actual != expected_samples:
+                    lost = expected_samples - actual
+                    print(f"  [WARN] {test_type}: expected {expected_samples} samples but got {actual} ({lost} rows lost)")
+                    print(f"         Likely cause: V5 USB serial buffer overflow. Data may be incomplete.")
+                elif corrupted:
+                    print(f"  [WARN] {test_type}: data corruption detected but all {actual} rows recovered")
             except Exception as e:
                 print(f"  [WARN] Failed to parse {test_type}: {e}")
 
