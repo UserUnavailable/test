@@ -101,6 +101,7 @@ void pre_auton(void) {
   vexcodeInit();
   Up.set(true);
   Basket.set(false);
+  Anchor.set(false);
   Gyro.startCalibration();
   while (Gyro.isCalibrating()) { task::sleep(50); }
   Gyro.setRotation(0.0, degrees);

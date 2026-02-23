@@ -252,6 +252,20 @@ void hook_auto_ctrl(){
     wait(20, msec);
   }
 }
+void anchor_ctrl(){
+  while(true){
+    if(Controller1.ButtonUp.pressing()){
+      Anchor.set(!Anchor.value());
+      while(Controller1.ButtonUp.pressing()){
+        continue;
+      }
+    }
+    if(auto_control==1){
+      break;
+    }
+    wait(20, msec);
+  }
+}
 void Joystick(void){
   thread base_control_thread=thread(base_control);
   thread hook_control_thread=thread(hook_control);
@@ -262,6 +276,7 @@ void Joystick(void){
   thread ball_control_thread=thread(Ball_ctrl);
   thread up_control_thread=thread(Up_ctrl);
   thread hook_auto_control_thread=thread(hook_auto_ctrl);
+  thread anchor_control_thread=thread(anchor_ctrl);
   Color.setLightPower(100, percent); 
   Color_2.setLightPower(100, percent);
   Color_3.setLightPower(100, percent);

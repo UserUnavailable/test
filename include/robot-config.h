@@ -27,6 +27,7 @@ extern digital_out Wing_R;
 extern digital_out Wing_L;
 extern digital_out Up;
 extern digital_out Basket;
+extern digital_out Anchor;
 
 /**
  * Used to initialize code/tasks/devices added using tools in VEXcode Pro.
