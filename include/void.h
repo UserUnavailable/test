@@ -22,7 +22,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 全局变量定义
 ///////////////////////////////////////////////////////////////////////////////
-float motor_min_speed = 20; //电机最小驱动功率(自动阶段统一使用)
+float motor_min_speed = 24; //电机最小驱动功率(自动阶段统一使用)
 
 //int auto_color_ctrl=0;//自动颜色控制
 extern int auto_color_ctrl=0; //自动颜色控制开关: 0-关闭, 1-开启
@@ -493,7 +493,7 @@ void Get_Ball(float spd)//0：停；1：中高桥；-1：低桥；2：吸球.   
     if(!auto_color_divide){
       Ball(100);
     }
-    Shoot(-60);  //射球轮反转
+    Shoot(-50);  //射球轮反转
     auto_color_ctrl=1; //开启颜色识别
     }
 }
@@ -542,7 +542,7 @@ void Ball_Intake()
   else if(Alliance==1){ //红方:保留红球,排出蓝球
     if(Color_2.color()==blue){   //靠下传感器检测到蓝球
       Ball(-100);  //反转排出
-      Intake(30);  //降低吸球速度
+      Intake(20);  //降低吸球速度
     }
     else if(Color_2.color()==red){ //检测到红球
       Ball(100);   //正常吸入
@@ -550,7 +550,7 @@ void Ball_Intake()
     }
     else if(Color.color()==blue&&Color.isNearObject()){ //靠上传感器检测到蓝球
       Ball(-100);  //反转排出
-      Intake(30);
+      Intake(20);
     }
     else if(Color.color()==red&&Color.isNearObject()){ //检测到红球
       Ball(100);
@@ -568,7 +568,7 @@ void Ball_Intake()
     }
     else if(Color_2.color()==red){ //检测到红球
       Ball(-100);  //反转排出
-      Intake(30);  //降低吸球速度
+      Intake(20);  //降低吸球速度
     }
     else if(Color.color()==blue&&Color.isNearObject()){ //上传感器检测到蓝球
       Ball(100);
@@ -576,7 +576,7 @@ void Ball_Intake()
     }
     else if(Color.color()==red&&Color.isNearObject()){ //检测到红球
       Ball(-100);  //反转排出
-      Intake(30);
+      Intake(20);
     }
     else{ //未检测到球
       Ball(100);
@@ -795,12 +795,12 @@ void Run_gyro_new(double enc, float g=now)
   RightRun_3.resetPosition();
   
   //PD参数 — gyro自适应: kp = 基准值 × RPM × kp_scale, kd = 基准值 × RPM × kd_scale
-  float gyro_kp_base = 8.0;     //基准kp (100 RPM下调优所得)
-  float gyro_kd_base = 0.5;     //基准kd (100 RPM下调优所得)
+  float gyro_kp_base = 7.0;     //基准kp (100 RPM下调优所得)
+  float gyro_kd_base = 0.7;     //基准kd (100 RPM下调优所得)
   //float gyro_kp_scale = 0.009;  //kp的RPM自适应系数
   //float gyro_kd_scale = 0.005;  //kd的RPM自适应系数 (比kp更大,增强减速阶段阻尼)
-  float move_kp = 0.3;   //距离比例系数 500:0.3 1000:0.3 1500:0.3
-  float move_kd = fabs(enc) <= 500 ? 0.03 : (fabs(enc) <= 1000 ? 0.04 : 0.05); // 距离微分系数 (单位°/s, 接近目标时vm为负→减速) 500:0.03 1000:0.04 1500:0.05
+  float move_kp = 0.35;   //距离比例系数 500:0.3 1000:0.3 1500:0.3
+  float move_kd = fabs(enc) <= 500 ? 0.025 : (fabs(enc) <= 1000 ? 0.03 : 0.04); // 距离微分系数 (单位°/s, 接近目标时vm为负→减速) 500:0.03 1000:0.04 1500:0.05
 
   float menc=0;//左右轮编码器平均值
   float vm = 0;//线速度差
@@ -1182,12 +1182,12 @@ void Turn_Gyro(float target)
    while (!arrived)
    {
     error = target - Gyro.rotation(degrees) ;
-    V = error - lasterror; //计算角速度(微分)
-    lasterror = error;
+   V = error - lasterror; //计算角速度(微分)
+   lasterror = error;
 
-    //自适应kp/kd：根据当前误差动态切换
-    kp = fabs(error)>30&&fabs(error)<120 ? 3.2 : (fabs(error)<30 ? 4.5 : 3);
-    kd = fabs(error)>30&&fabs(error)<120 ? 42  : (fabs(error)<30 ? 35 : 30);
+   //自适应kp/kd：根据当前误差动态切换 (中段kd 30→24 + 小段kd 26→22，压110°/180°收尾的反向刹车)
+   kp = fabs(error)>30&&fabs(error)<120 ? 3.2 : (fabs(error)<30 ? 3.6 : 3);
+   kd = fabs(error)>30&&fabs(error)<120 ? 24  : (fabs(error)<30 ? 22 : 30);
     
     //提前退出判断:角度误差小且电机基本停止
     if (fabs(error)<=1)
@@ -2100,7 +2100,7 @@ void test_straight(double enc, float g=0)
   //打印测试类型标识
   printf("test_straight_v2\n"); //版本标记: v2=归一化dt版
 
-  //启动日志任务
+  //启动日志任务@
   test_log_type = 0; // straight模式
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
