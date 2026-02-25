@@ -175,4 +175,18 @@ void E_D()//从中桥到填装区到长桥
   Load.set(false);
   wait(200);
 }
+void Hook()
+{
+  now = 0;
+  Side = 1;
+  Start=Gyro.rotation(degrees)-now*Side;
+  Run_gyro_new(10);
+  Run_gyro_new(250, -55);
+  Wing_L.set(false);
+  Turn_Gyro(-4);
+  //Run_gyro_new(-520,0);
+  Run_gyro_new(-500,-10);
+  Turn_Gyro(18);
+  RunStop(hold);
+}
 /////////////////////////////////////////////////////////////////

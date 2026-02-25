@@ -8,25 +8,21 @@
   Wing_L.set(true);
   Get_Ball(2);
   Run_gyro_new(330);
+  wait(100);
   Load.set(true);
   wait(150);
   Turn_Gyro(130);
   Run_gyro_new(680);
-  Turn_Gyro(175); 
-  wait(50,msec);
-  Run_wall(40,1200,10);
+  Turn_Gyro(178); 
+  wait(20,msec);
+  Run_wall(30,1300,10);
   Run_gyro_new(-520);
   Load.set(false);
   Get_Ball(1);
-  wait(3000);
+  Run_wall(-5,2000,10);
+  wait(400);
   Get_Ball(0);
-  Run_gyro_new(100);
-  Turn_Gyro(225);
-  Wing_L.set(false);
-  Run_gyro_new(-300,205);
-  Run_gyro_new(-300,180);
-  Turn_Gyro(200);
-  RunStop(hold);
+  Hook();
 
   
 //右侧

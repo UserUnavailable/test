@@ -45,7 +45,7 @@ int testmotor=0;//开机测试马达是不是都转(未启用)
 int button=0;//遥控器释放自动防误触
 float Auto_time=0;//自动阶段总计时器
 float Start,now;//陀螺仪标定初始位置自动开始时重置
-float turn_slow=1;//转向速度控制 //0.6
+float turn_slow=1.1;//转向速度控制 //0.6
 float speedctrl=1;//前进速度控制1.2
 int ball_ctrl=0,shoot_ctrl=0,intake_ctrl=0;
 //int intake_ctrl=0,color_ctrl=0;//change_ctrl=1,shoot_ctrl=0,
@@ -143,6 +143,7 @@ void autonomous(void) {
   ColorThread=thread(Color_Control);
 // ..........................................................................
   AutoPro();
+  //Hook();
   /*
   Up.set(true);
   Basket.set(true);

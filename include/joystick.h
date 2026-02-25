@@ -256,6 +256,7 @@ void anchor_ctrl(){
   while(true){
     if(Controller1.ButtonDown.pressing()){
       Anchor.set(!Anchor.value());
+      RunStop(hold);
       while(Controller1.ButtonDown.pressing()){
         continue;
       }
