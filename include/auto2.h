@@ -2,34 +2,29 @@
   //C_A();
   //E_F_E();
   ////E_D();
-  now=180;
-  Start=Gyro.rotation(degrees)-now*Side;
-  /*
-  now=14;
   
+  now=14;
+  Start=Gyro.rotation(degrees)-now*Side;
   Wing_L.set(true);
   Get_Ball(2);
   Run_gyro_new(330);
-  wait(50);
   Load.set(true);
   wait(150);
   Turn_Gyro(130);
   Run_gyro_new(680);
   Turn_Gyro(175); 
-  wait(100,msec);
+  wait(50,msec);
   Run_wall(40,1200,10);
   Run_gyro_new(-520);
   Load.set(false);
   Get_Ball(1);
   wait(3000);
   Get_Ball(0);
-  */
-  
   Run_gyro_new(100);
   Turn_Gyro(225);
   Wing_L.set(false);
-  Run_gyro_new(-150);
-  Run_gyro_new(-450,180);
+  Run_gyro_new(-300,205);
+  Run_gyro_new(-300,180);
   Turn_Gyro(200);
   RunStop(hold);
 
