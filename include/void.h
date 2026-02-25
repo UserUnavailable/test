@@ -1174,6 +1174,7 @@ void Turn_Gyro(float target)
    bool arrived;      //到达目标标志
    float Time=Brain.timer(timeUnits::sec);
    float timeout=fabs(error/50); //根据角度计算超时时间
+   if (timeout>3 || timeout!=timeout) timeout=3; // 上限3秒,避免占满自动阶段; NaN时也用3
    float pow;         //实际输出功率
    
    lasterror = error;
@@ -1210,6 +1211,7 @@ void Turn_Gyro(float target)
     //PID计算输出功率
     pow = kp * error + kd * V + ki*integral;
     pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
+    if (fabs(pow) < 24 && fabs(error) > 1) pow = sgn(pow) * 24; //最低功率保底
 
     // 写入全局变量供测试日志读取
     test_log_gyro_err = error;
@@ -1307,10 +1309,11 @@ void Turn_Side(float target)
 void Run_wall(int spd,float timeout,int err)
 {
   float Time_1=Brain.timer(timeUnits::sec);
-	while((Brain.timer(timeUnits::sec)-Time_1<=timeout/1000))
+  float ref = Gyro.rotation(degrees);  // 以进入时的当前朝向为直线参考,不依赖上一动是否到位
+  while((Brain.timer(timeUnits::sec)-Time_1<=timeout/1000))
   {
-    //检测角度偏离
-    if (fabs(Gyro.rotation(degrees) -now+Start)>err)
+    //检测角度偏离(相对进入时的朝向)
+    if (fabs(Gyro.rotation(degrees) - ref) > err)
     {
       break; //偏离过大,退出
     }

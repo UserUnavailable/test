@@ -105,7 +105,7 @@ void Intake_Shoot_ctrl(){
         Shoot(-40);
         Intake(0);
       }
-      if(!Controller1.ButtonR2.pressing()&&!Controller1.ButtonB.pressing()&&!Controller1.ButtonDown.pressing()){
+      if(!Controller1.ButtonR2.pressing()&&!Controller1.ButtonB.pressing()&&!Controller1.ButtonRight.pressing()){
         ball_ctrl=1;
       }
       intake_ctrl=0;
@@ -123,7 +123,7 @@ void Intake_Shoot_ctrl(){
       Ball(-100);
       Shoot(-100); //未测试，目的：使球更快下去
     }
-    else if(Controller1.ButtonDown.pressing()){
+    else if(Controller1.ButtonRight.pressing()){
       Up.set(false);
       shoot_ctrl=-1;
       ball_ctrl=0;
@@ -139,7 +139,7 @@ void Intake_Shoot_ctrl(){
         Shoot(100);          
     }
     else{
-      if((!Controller1.ButtonR1.pressing())&&(!Controller1.ButtonB.pressing())&&(!Controller1.ButtonDown.pressing())){
+      if((!Controller1.ButtonR1.pressing())&&(!Controller1.ButtonB.pressing())&&(!Controller1.ButtonRight.pressing())){
         ball_ctrl=1;
       }
       shoot_ctrl=1;
@@ -254,9 +254,9 @@ void hook_auto_ctrl(){
 }
 void anchor_ctrl(){
   while(true){
-    if(Controller1.ButtonUp.pressing()){
+    if(Controller1.ButtonDown.pressing()){
       Anchor.set(!Anchor.value());
-      while(Controller1.ButtonUp.pressing()){
+      while(Controller1.ButtonDown.pressing()){
         continue;
       }
     }
