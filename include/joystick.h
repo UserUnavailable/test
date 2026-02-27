@@ -14,24 +14,33 @@ int mode_ctrl=2;
 thread AutoIntakeThread=thread(auto_Intake);*/
 void base_control(){
   while(true){
-    if(auto_stop){
-      wait(20,msec);
-      continue;
-    }
-    else{
-      int left;
-      int right;
-      int a,b;
-      int transverse;
-      a=Controller1.Axis3.value();
-      b=Controller1.Axis1.value();
-      left=a*speedctrl+b*turn_slow;
-      right=-a*speedctrl+b*turn_slow;
-      Run_Ctrl(left,right);
-    }
-    if(auto_control==1){
-      break;
-    }
+    int left;
+       int right;
+       int a,b;
+       int transverse;
+       a=Controller1.Axis3.value();
+       b=Controller1.Axis1.value();
+       left=a*speedctrl+b*turn_slow;
+       right=-a*speedctrl+b*turn_slow;
+       Run_Ctrl(left,right);
+    // if(auto_stop){
+    //   wait(20,msec);
+    //   continue;
+    // }
+    // else{
+    //   int left;
+    //   int right;
+    //   int a,b;
+    //   int transverse;
+    //   a=Controller1.Axis3.value();
+    //   b=Controller1.Axis1.value();
+    //   left=a*speedctrl+b*turn_slow;
+    //   right=-a*speedctrl+b*turn_slxow;
+    //   Run_Ctrl(left,right);
+    // }
+    // if(auto_control==1){
+    //   break;
+    // }
     wait(5, msec);
   }
 }
@@ -105,7 +114,7 @@ void Intake_Shoot_ctrl(){
         Shoot(-40);
         Intake(0);
       }
-      if(!Controller1.ButtonR2.pressing()&&!Controller1.ButtonB.pressing()&&!Controller1.ButtonRight.pressing()){
+      if(!Controller1.ButtonR2.pressing()&&!Controller1.ButtonB.pressing()&&!Controller1.ButtonDown.pressing()){
         ball_ctrl=1;
       }
       intake_ctrl=0;
@@ -123,7 +132,7 @@ void Intake_Shoot_ctrl(){
       Ball(-100);
       Shoot(-100); //未测试，目的：使球更快下去
     }
-    else if(Controller1.ButtonRight.pressing()){
+    else if(Controller1.ButtonDown.pressing()){
       Up.set(false);
       shoot_ctrl=-1;
       ball_ctrl=0;
@@ -139,7 +148,7 @@ void Intake_Shoot_ctrl(){
         Shoot(100);          
     }
     else{
-      if((!Controller1.ButtonR1.pressing())&&(!Controller1.ButtonB.pressing())&&(!Controller1.ButtonRight.pressing())){
+      if((!Controller1.ButtonR1.pressing())&&(!Controller1.ButtonB.pressing())&&(!Controller1.ButtonDown.pressing())){
         ball_ctrl=1;
       }
       shoot_ctrl=1;
@@ -277,7 +286,6 @@ void Joystick(void){
   thread ball_control_thread=thread(Ball_ctrl);
   thread up_control_thread=thread(Up_ctrl);
   thread hook_auto_control_thread=thread(hook_auto_ctrl);
-  thread anchor_control_thread=thread(anchor_ctrl);
   Color.setLightPower(100, percent); 
   Color_2.setLightPower(100, percent);
   Color_3.setLightPower(100, percent);

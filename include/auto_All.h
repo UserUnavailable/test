@@ -185,7 +185,7 @@ void Hook()
   Wing_L.set(false);
   Turn_Gyro(-4);
   //Run_gyro_new(-520,0);
-  Run_gyro_new(-500,-10);
+  Run_gyro_new(-550,0);
   Turn_Gyro(18);
   RunStop(hold);
 }

@@ -1161,7 +1161,7 @@ void Turn_Gyro(float target)
    
    //PID参数(kp/kd在循环内根据误差动态调整)
    float kp, kd;
-   float ki =35;   //积分系数
+   float ki =25;   //积分系数
    float irange=3.0;  //积分限幅
    float istart=60;   //积分启动阈值
    float dtol = 0.2;  //停止速度阈值
@@ -1186,9 +1186,9 @@ void Turn_Gyro(float target)
    V = error - lasterror; //计算角速度(微分)
    lasterror = error;
 
-   //自适应kp/kd：根据当前误差动态切换 (中段kd 30→24 + 小段kd 26→22，压110°/180°收尾的反向刹车)
-   kp = fabs(error)>30&&fabs(error)<120 ? 3.2 : (fabs(error)<30 ? 3.6 : 3);
-   kd = fabs(error)>30&&fabs(error)<120 ? 24  : (fabs(error)<30 ? 22 : 30);
+  //自适应kp/kd：恢复中高kd保证制动力，振荡问题靠降低最低功率clamp解决
+  kp = fabs(error) > 120 ? 2.8 : (fabs(error) > 30 ? 3.0 : 3.4);
+  kd = fabs(error) > 120 ? 30  : (fabs(error) > 30 ? 24  : 20);
     
     //提前退出判断:角度误差小且电机基本停止
     if (fabs(error)<=1)
@@ -1209,9 +1209,9 @@ void Turn_Gyro(float target)
     integral = 0;
     
     //PID计算输出功率
-    pow = kp * error + kd * V + ki*integral;
-    pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
-    if (fabs(pow) < 24 && fabs(error) > 1) pow = sgn(pow) * 24; //最低功率保底
+   pow = kp * error + kd * V + ki*integral;
+   pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
+   if (fabs(pow) < 14 && fabs(error) > 2) pow = sgn(pow) * 14; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
 
     // 写入全局变量供测试日志读取
     test_log_gyro_err = error;

@@ -45,7 +45,7 @@ int testmotor=0;//开机测试马达是不是都转(未启用)
 int button=0;//遥控器释放自动防误触
 float Auto_time=0;//自动阶段总计时器
 float Start,now;//陀螺仪标定初始位置自动开始时重置
-float turn_slow=1.1;//转向速度控制 //0.6
+float turn_slow=1;//转向速度控制 //0.6
 float speedctrl=1;//前进速度控制1.2
 int ball_ctrl=0,shoot_ctrl=0,intake_ctrl=0;
 //int intake_ctrl=0,color_ctrl=0;//change_ctrl=1,shoot_ctrl=0,
@@ -75,7 +75,7 @@ Brain.resetTimer();
 //#include "auto_skill.h" 
   // safe=2;
   // BallTask=task(Intake_Color);
-//Turn_Gyro(90);
+//Turn_Gyro(20);
 AutoPro();//手动放自动的点
 //////////////////////////////////////////////////////////////////////
 //button=2;
@@ -144,6 +144,7 @@ void autonomous(void) {
 // ..........................................................................
   AutoPro();
   //Hook();
+
   /*
   Up.set(true);
   Basket.set(true);
@@ -156,7 +157,9 @@ void autonomous(void) {
   //Side=1; //AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
   //test_gyro_pd(8.0, 0.8);  // 恒速100RPM gyro PD调参: kp=2.0, kd=0.2
   //test_straight(1500);
-  //test_turn(180);
+  //test_turn(20);
+  //test_turn(110);
+  //test_turn(270);
   //Run_wall(-50,2000,3);
   //test_minspeed();
 
