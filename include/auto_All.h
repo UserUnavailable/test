@@ -180,13 +180,21 @@ void Hook()
   now = 0;
   Side = 1;
   Start=Gyro.rotation(degrees)-now*Side;
-  Run_gyro_new(10);
-  Run_gyro_new(250, -55);
+  Run_gyro_new(70);
+  Run_gyro_new(230, -70);
   Wing_L.set(false);
-  Turn_Gyro(-4);
+  Turn_Gyro(-10);
+  Run_gyro_new(-580, 3);
+  
+  Run_gyro_new(-50, 30);
   //Run_gyro_new(-520,0);
-  Run_gyro_new(-550,0);
+  /*
+  Run_gyro_new(-550);
   Turn_Gyro(18);
   RunStop(hold);
+  */
+  
+  
+  
 }
 /////////////////////////////////////////////////////////////////
