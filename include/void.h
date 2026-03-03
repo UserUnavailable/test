@@ -1159,18 +1159,14 @@ void Turn_Gyro(float target)
    target=Side*target+Start; //根据场地方向调整目标角度
    float error = target - Gyro.rotation(degrees) ;//与目标角度距离
    
-   //PID参数(kp/kd在循环内根据误差动态调整)
+   //PD参数(kp/kd在循环内根据误差动态调整)
    float kp, kd;
-   float ki =25;   //积分系数
-   float irange=3.0;  //积分限幅
-   float istart=60;   //积分启动阈值
    float dtol = 0.2;  //停止速度阈值
    float errortolerance = 2; //角度误差容忍度
    float lim =100;    //功率限幅
    
    float lasterror;   //上一次角度误差
    float V= 0;        //角速度(微分项)
-   float integral = 0;//积分累加值
    bool arrived;      //到达目标标志
    float Time=Brain.timer(timeUnits::sec);
    float timeout=fabs(error/50); //根据角度计算超时时间
@@ -1200,16 +1196,8 @@ void Turn_Gyro(float target)
     if ((fabs(error) <= errortolerance && fabs(V) <= dtol) || (Brain.timer(timeUnits::sec)-Time)>=timeout+1)
     {arrived = true;}
     
-    //积分计算(仅在误差较小时启用,防止积分饱和)
-    if (fabs(integral) < irange && fabs(error) < istart)
-      integral += sgn(error)*0.01 ;
-    
-    //积分清零(误差过零点时)
-    if (error * lasterror <= 0)
-    integral = 0;
-    
-    //PID计算输出功率
-   pow = kp * error + kd * V + ki*integral;
+    //PD计算输出功率
+   pow = kp * error + kd * V;
    pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
    if (fabs(pow) < 14 && fabs(error) > 2) pow = sgn(pow) * 14; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
 
