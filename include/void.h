@@ -181,7 +181,7 @@ void hold_stop(int time){
  */
 void Run(int spd)
 {
-  Run_Ctrl(spd,-spd);
+  Run_Ctrl(spd,spd);
 }
 
 /**
@@ -190,7 +190,7 @@ void Run(int spd)
  */
 void Turn(int turnspd)
 {
- Run_Ctrl(turnspd,turnspd);
+ Run_Ctrl(turnspd,-turnspd);
 }
 
 /**
@@ -770,7 +770,7 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
     else
     {
     //应用补偿后的功率到左右电机
-    Run_Ctrl((sgn(enc)*final_power)+ turnpower,-(sgn(enc)*final_power) +turnpower);
+    Run_Ctrl((sgn(enc)*final_power)+ turnpower,(sgn(enc)*final_power) -turnpower);
     }
   }
   RunStop(brake);
@@ -872,7 +872,7 @@ void Run_gyro_new(double enc, float g=now)
     else
     {
     //应用补偿后的功率到左右电机
-    Run_Ctrl((sgn(enc)*final_power)+ turnpower,-(sgn(enc)*final_power) +turnpower);
+    Run_Ctrl((sgn(enc)*final_power)+ turnpower,(sgn(enc)*final_power) -turnpower);
     }
     vex::task::sleep(10); 
   }
@@ -997,7 +997,7 @@ void FAuto_Run_gyro(double dis , double power, float g, bool reverse=false){
     double final_power = sgn(power) * current_power;
 
     //应用补偿后的功率到左右电机
-    Run_Ctrl(final_power+ turnpower,-final_power +turnpower);
+    Run_Ctrl(final_power+ turnpower,final_power -turnpower);
   }
   RunStop(brake);
 }
@@ -1101,7 +1101,7 @@ void Dis_Run_gyro(double dis, double power, float g, int sensor_id, bool reverse
     double final_power = sgn(power) * current_power;
 
     //应用补偿后的功率到左右电机(无测距仪纠偏)
-    Run_Ctrl(final_power+ turnpower,-final_power +turnpower);
+    Run_Ctrl(final_power+ turnpower,final_power -turnpower);
   }
   RunStop(brake);
 }
@@ -1369,7 +1369,7 @@ void Runencode(int speed,int encode)
     //检查是否到达目标编码器值
     if (((abs(LeftRun_1.position(rotationUnits::deg))+abs(RightRun_1.position(rotationUnits::deg)))/2)<abs(encode))
 		{
-			Run_V5(speed,-speed); //继续前进
+			Run_V5(speed,speed); //继续前进
 		}
 
 	  else
@@ -2181,9 +2181,9 @@ void test_minspeed()
 
     //驱动5秒
     if(forward)
-      Run_Ctrl(power, -power);   //前进
+      Run_Ctrl(power, power);   //前进
     else
-      Run_Ctrl(-power, power);   //后退
+      Run_Ctrl(-power, -power);   //后退
 
     vex::task::sleep(5000);
 
@@ -2277,7 +2277,7 @@ void test_gyro_pd(float gyro_kp, float gyro_kd)
     test_log_dt            = dt;
 
     // 恒压驱动 + gyro 转向补偿
-    Run_Ctrl(base_power + turnpower, -base_power + turnpower);
+    Run_Ctrl(base_power + turnpower, base_power - turnpower);
     vex::task::sleep(10);
   }
   RunStop(brake);

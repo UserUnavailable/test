@@ -21,7 +21,7 @@ void base_control(){
        a=Controller1.Axis3.value();
        b=Controller1.Axis1.value();
        left=a*speedctrl+b*turn_slow;
-       right=-a*speedctrl+b*turn_slow;
+       right=a*speedctrl-b*turn_slow;
        Run_Ctrl(left,right);
     // if(auto_stop){
     //   wait(20,msec);
