@@ -9,12 +9,12 @@ brain  Brain;
 
 // VEXcode device constructors
 controller Controller1 = controller(primary);
-motor LeftRun_1 = motor(PORT9, ratio18_1, true);
-motor LeftRun_2 = motor(PORT13, ratio18_1, false);
-motor LeftRun_3 = motor(PORT3, ratio18_1, true);
-motor RightRun_1 = motor(PORT11, ratio18_1, false);
-motor RightRun_2 = motor(PORT12, ratio18_1, true);
-motor RightRun_3 = motor(PORT14, ratio18_1, false);
+motor LeftRun_1 = motor(PORT13, ratio6_1, false);
+motor LeftRun_2 = motor(PORT14, ratio6_1, true);
+motor LeftRun_3 = motor(PORT15, ratio6_1, true);
+motor RightRun_1 = motor(PORT18, ratio6_1, true);
+motor RightRun_2 = motor(PORT19, ratio6_1, false);
+motor RightRun_3 = motor(PORT20, ratio6_1, false);
 motor Intake_1 = motor(PORT6, ratio6_1, true);
 motor Shoot_1 = motor(PORT2, ratio6_1, false);
 motor Ball_1 = motor(PORT1, ratio18_1, false);

@@ -287,6 +287,8 @@ void anchor_ctrl(){
 void Joystick(void){
   thread base_control_thread=thread(base_control);
   thread hook_control_thread=thread(hook_control);
+  /*
+  
   thread hold_control_thread=thread(hold_ctrl);
   thread choose_control_thread=thread(choose_ctrl);
   thread load_control_thread=thread(load_ctrl);
@@ -297,6 +299,9 @@ void Joystick(void){
   Color.setLightPower(100, percent); 
   Color_2.setLightPower(100, percent);
   Color_3.setLightPower(100, percent);
+  */
+  
+  
   /*while(true){
     Brain.Screen.clearScreen();
     Brain.Screen.setCursor(1,1);

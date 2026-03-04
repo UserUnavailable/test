@@ -136,11 +136,11 @@ void pre_auton(void) {
 /*---------------------------------------------------------------------------*/
 
 void autonomous(void) {
-  Up.set(true);
-  Basket.set(true);
+  //Up.set(true);
+  //Basket.set(true);
   auto_control=1;
   driver_control=0;
-  ColorThread=thread(Color_Control);
+  //ColorThread=thread(Color_Control);
 // ..........................................................................
   AutoPro();
   //Hook();
