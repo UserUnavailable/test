@@ -14,15 +14,23 @@ int mode_ctrl=2;
 thread AutoIntakeThread=thread(auto_Intake);*/
 void base_control(){
   while(true){
-    int left;
-       int right;
-       int a,b;
-       int transverse;
-       a=Controller1.Axis3.value();
-       b=Controller1.Axis1.value();
-       left=a*speedctrl+b*turn_slow;
-       right=a*speedctrl-b*turn_slow;
-       Run_Ctrl(left,right);
+    float a = Controller1.Axis3.value();
+    float b = Controller1.Axis1.value();
+
+    float theory_straight = a * speedctrl;
+    float theory_turn = b * turn_slow;
+
+    float max_output = 127.0;
+    float max_forward_sq = max_output * max_output - theory_turn * theory_turn;
+    float max_forward = (max_forward_sq > 0) ? sqrt(max_forward_sq) : 0;
+
+    if (fabs(theory_straight) > max_forward) {
+      theory_straight = (theory_straight > 0) ? max_forward : -max_forward;
+    }
+
+    int left  = (int)(theory_straight + theory_turn);
+    int right = (int)(theory_straight - theory_turn);
+    Run_Ctrl(left, right);
     // if(auto_stop){
     //   wait(20,msec);
     //   continue;
