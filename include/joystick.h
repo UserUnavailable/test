@@ -55,10 +55,16 @@ void base_control(){
 void hook_control(){
   while(true){
     if(Controller1.ButtonL1.pressing()){
-      Wing_L.set(false);
+      Wing_L.set(true);
     }
     else{
-      Wing_L.set(true);
+      Wing_L.set(false);
+    }
+    if(Controller1.ButtonRight.pressing()){
+      Anchor.set(true);
+    }
+    else{
+      Anchor.set(false);
     }
     if(auto_control==1){
       break;
@@ -104,62 +110,31 @@ void load_ctrl(){
 void Intake_Shoot_ctrl(){
   while(true){
     if(Controller1.ButtonR1.pressing()){
-      Ball_Intake();
-      ball_ctrl=0;            //可能会导致一边吸球一边吐球时由于筛选导致吐球不顺
-      intake_ctrl=1;
-      if(shoot_ctrl==1){
-        Shoot(-50);
-      }
+      Intake(100);
+      Ball(100);
+      Shoot(100);
     }
-    /*else if(Controller1.ButtonR2.pressing()){
-      ball_ctrl=0;
-      Intake(-100);
-      Ball(-100);
-      //ball_ctrl=-1;
-    }*/
-    else{
-      if(shoot_ctrl==1){
-        Shoot(-40);
-        Intake(0);
-      }
-      if(!Controller1.ButtonR2.pressing()&&!Controller1.ButtonB.pressing()&&!Controller1.ButtonDown.pressing()){
-        ball_ctrl=1;
-      }
-      intake_ctrl=0;
-    }
-    if(Controller1.ButtonX.pressing()){
+    else if(Controller1.ButtonR2.pressing()){
       Up.set(true);
-      //Brain.Timer.reset();
-      mode_ctrl=2;
+      Intake(100);
+      Ball(100);
+      Shoot(100);
     }
-    else if(Controller1.ButtonB.pressing()&&(!Controller1.ButtonR2.pressing())){
-      ball_ctrl=0;
-      shoot_ctrl=-1;
+    else if(Controller1.ButtonB.pressing()){
       Intake(-100);
-      //Intake(-50); //技能赛
       Ball(-100);
-      Shoot(-100); //未测试，目的：使球更快下去
+      Shoot(-100);
     }
     else if(Controller1.ButtonDown.pressing()){
-      Up.set(false);
-      shoot_ctrl=-1;
-      ball_ctrl=0;
-      Ball_Intake();
-      Shoot(50);
-      Brain.Timer.clear();
-      mode_ctrl=1;
-    }
-    if(Controller1.ButtonR2.pressing()){
-        shoot_ctrl=-1;
-        ball_ctrl=0;
-        Ball_Intake();
-        Shoot(100);          
+      Intake(100);
+      Ball(100);
+      Shoot(-100);
     }
     else{
-      if((!Controller1.ButtonR1.pressing())&&(!Controller1.ButtonB.pressing())&&(!Controller1.ButtonDown.pressing())){
-        ball_ctrl=1;
-      }
-      shoot_ctrl=1;
+      Intake(0);
+      Ball(0);
+      Shoot(0);
+      Up.set(false);
     }
     if(auto_control==1){
       break;
@@ -287,11 +262,13 @@ void anchor_ctrl(){
 void Joystick(void){
   thread base_control_thread=thread(base_control);
   thread hook_control_thread=thread(hook_control);
+  thread load_control_thread=thread(load_ctrl);
+  thread Intake_Shoot_control_thread=thread(Intake_Shoot_ctrl);
   /*
   
   thread hold_control_thread=thread(hold_ctrl);
   thread choose_control_thread=thread(choose_ctrl);
-  thread load_control_thread=thread(load_ctrl);
+  
   thread Intake_Shoot_control_thread=thread(Intake_Shoot_ctrl);
   thread ball_control_thread=thread(Ball_ctrl);
   thread up_control_thread=thread(Up_ctrl);

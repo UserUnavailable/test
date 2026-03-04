@@ -180,8 +180,8 @@ void autonomous(void) {
 
 void usercontrol(void) {
   // User control code here, inside the loop
-  Up.set(true);
-  Basket.set(true);
+  //Up.set(true);
+  //Basket.set(true);
   RunStop(coast);
   task::stop (BallTask);
   task::stop (AutoTask);
@@ -191,7 +191,7 @@ void usercontrol(void) {
   PrintTask=task(Print);
   //driver_control=1;
 
-  Wing_R.set(true);
+  //Wing_R.set(true);
   //Vision_Center_Track();
   Joystick();
   while (1) {
