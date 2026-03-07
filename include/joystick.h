@@ -31,13 +31,6 @@ void base_control(){
     int left  = (int)(theory_straight + theory_turn);
     int right = (int)(theory_straight - theory_turn);
     
-    // 俯仰保护：前后倾斜超过5度时停转底盘电机
-    float current_pitch = Gyro.orientation(pitch, degrees);
-    if (fabs(current_pitch) > 5.0) {
-      left = 0;
-      right = 0;
-    }
-    
     Run_Ctrl(left, right);
     // if(auto_stop){
     //   wait(20,msec);
