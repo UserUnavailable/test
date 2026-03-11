@@ -46,7 +46,7 @@ int button=0;//遥控器释放自动防误触
 float Auto_time=0;//自动阶段总计时器
 float Start,now;//陀螺仪标定初始位置自动开始时重置
 float turn_slow=0.7;//转向速度控制 //0.6
-float speedctrl=1;//前进速度控制1.2
+float speedctrl=1.2;//前进速度控制1.2
 int ball_ctrl=0,shoot_ctrl=0,intake_ctrl=0;
 //int intake_ctrl=0,color_ctrl=0;//change_ctrl=1,shoot_ctrl=0,
 int flag_start;
@@ -99,7 +99,7 @@ competition Competition;
 void pre_auton(void) {
   // Initializing Robot Configuration. DO NOT REMOVE!
   vexcodeInit();
-  Up.set(true);
+  //Up.set(true);
   Basket.set(false);
   Anchor.set(false);
   Gyro.startCalibration();
@@ -136,13 +136,15 @@ void pre_auton(void) {
 /*---------------------------------------------------------------------------*/
 
 void autonomous(void) {
-  Up.set(true);
+  //Up.set(true);
   Basket.set(true);
   auto_control=1;
   driver_control=0;
   ColorThread=thread(Color_Control);
+  Anchor.set(false);
 // ..........................................................................
   AutoPro();
+  //Side=1;
   //Hook();
 
   /*
@@ -180,7 +182,7 @@ void autonomous(void) {
 
 void usercontrol(void) {
   // User control code here, inside the loop
-  Up.set(true);
+  //Up.set(true);
   Basket.set(true);
   RunStop(coast);
   task::stop (BallTask);
@@ -189,23 +191,24 @@ void usercontrol(void) {
   auto_control=0;
   auto_color_ctrl=0;
   PrintTask=task(Print);
-  //driver_control=1;
+  // //driver_control=1;
 
   Wing_R.set(true);
-  //Vision_Center_Track();
+  // //Vision_Center_Track();
   Joystick();
-  while (1) {
-    // This is the main execution loop for the user control program.
-    // Each time through the loop your program should update motor + servo
-    // values based on feedback from the joysticks.
+  // while (1) {
+  //   // This is the main execution loop for the user control program.
+  //   // Each time through the loop your program should update motor + servo
+  //   // values based on feedback from the joysticks.
 
-    // ........................................................................
-    // Insert user code here. This is where you use the joystick values to
-    // update your motors, etc.
-    // ........................................................................
-    wait(20, msec); // Sleep the task for a short amount of time to
-                    // prevent wasted resources.
-  }
+  //   // ........................................................................
+  //   // Insert user code here. This is where you use the joystick values to
+  //   // update your motors, etc.
+  //   // ........................................................................
+  //   wait(20, msec); // Sleep the task for a short amount of time to
+  //                   // prevent wasted resources.
+  // }
+  
 }
 
 //

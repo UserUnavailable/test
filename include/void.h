@@ -700,7 +700,7 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
   
   //PID参数
   //float gyro_kp = 1;
-  float gyro_kp = 2;   //角度比例系数
+  float gyro_kp = 7.0;   //角度比例系数
   float gyro_kd = 20;  //角度微分系数
   float ramp_kp = 0.01; //减速比例系数
   
@@ -1213,9 +1213,75 @@ void Turn_Gyro(float target)
    RunStop(brake);
 
 }
+///////////////////////////////////////////////////////////////////////////////
+// Anchor 航向锁定控制（基于陀螺仪）
+///////////////////////////////////////////////////////////////////////////////
+
+// Anchor 锁定目标航向（陀螺仪角度）
+extern float anchor_target_heading;
+float anchor_target_heading = 0;
+
+/**
+ * @brief 航向锁定控制（基于陀螺仪的P控制）
+ * @param enable 是否激活锁定
+ * @description 使用P控制保持机器人航向不变，被撞转后自动补偿回原航向
+ *              类似电子罗盘锁定效果
+ */
+void Anchor_Lock(bool enable)
+{
+    // P控制参数（参考Turn_Gyro和Run_gyro的参数）
+    const float kp = 3.0;       // 比例系数（越大锁定越紧，但可能振荡）
+    const float lim = 60;       // 功率限幅（防止电机过热）
+    const float deadband = 1.0; // 死区（误差小于此值时不输出，减少抖动）
+    const float min_power = 14; // 最低功率（克服摩擦，参考Turn_Gyro）
+    
+    if (!enable) {
+        return;
+    }
+    
+    // 计算航向误差
+    float current_heading = Gyro.rotation(degrees);
+    float error = anchor_target_heading - current_heading;
+    
+    // P控制计算输出（只控制转向，不控制平移）
+    float turn_power = kp * error;
+    
+    // 限幅
+    if (fabs(turn_power) > lim) {
+        turn_power = sgn(turn_power) * lim;
+    }
+    
+    // 死区处理
+    if (fabs(error) < deadband) {
+        turn_power = 0;
+    }
+    // 最低功率保底（误差较大时保证有足够力矩克服摩擦）
+    else if (fabs(turn_power) < min_power && fabs(error) > 2) {
+        turn_power = sgn(turn_power) * min_power;
+    }
+    
+    // 输出到左右电机（差速转向）
+    // 左转: 左负右正, 右转: 左正右负
+    m(LeftRun_1, (int)turn_power);
+    m(LeftRun_2, (int)turn_power);
+    m(LeftRun_3, (int)turn_power);
+    m(RightRun_1, (int)(-turn_power));
+    m(RightRun_2, (int)(-turn_power));
+    m(RightRun_3, (int)(-turn_power));
+}
+
+/**
+ * @brief 设置Anchor锁定目标航向（记录当前陀螺仪角度）
+ * @description 将当前陀螺仪角度记录为目标锁定航向
+ */
+void Anchor_SetTarget()
+{
+    anchor_target_heading = Gyro.rotation(degrees);
+}
+
 //////////////////////////////////////////////////////////////////////////
 /**
- * @brief 单侧转向PID控制
+ * @brief 单侧转向PD控制
  * @param target 目标角度
  * 通过控制单侧电机实现转向,转弯半径较大
  * target>0时控制左侧, target<0时控制右侧
@@ -1226,19 +1292,15 @@ void Turn_Side(float target)
    target=Side*target+Start; //根据场地方向调整
    float error = target - Gyro.rotation(degrees) ;//与目标角度距离
    
-   //PID参数
+   //PD参数
    float kp =5;    //比例系数
-   float ki =35;   //积分系数
    float kd =40;   //微分系数
-   float irange=2;    //积分限幅
-   float istart=80;   //积分启动阈值
    float dtol = 0.2;  //停止速度阈值
    float errortolerance = 2; //角度误差容忍度
    float lim =100;    //功率限幅
    
    float lasterror;   //上一次角度误差
    float V= 0;        //角速度
-   float integral = 0;//积分累加
    bool arrived;      //到达标志
    float Time=Brain.timer(timeUnits::sec);
    float timeout=fabs(error/50);
@@ -1263,16 +1325,8 @@ void Turn_Side(float target)
     if ((fabs(error) <= errortolerance && fabs(V) <= dtol) || (Brain.timer(timeUnits::sec)-Time)>=timeout+1)
     {arrived = true;}
     
-    //积分计算
-    if (fabs(integral) < irange && fabs(error) < istart)
-      integral += sgn(error)*0.01 ;
-    
-    //积分清零
-    if (error * lasterror <= 0)
-    integral = 0;
-    
-    //PID计算
-    pow = kp * error + kd * V + ki*integral;
+    //PD计算
+    pow = kp * error + kd * V;
     pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //限幅
     
     //根据目标方向选择控制侧

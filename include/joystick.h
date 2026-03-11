@@ -91,10 +91,10 @@ void hold_ctrl(){
 void load_ctrl(){
   while(true){
     if(Controller1.ButtonL2.pressing()){
-      Load.set(!Load.value());
-      while(Controller1.ButtonL2.pressing()){
-        continue;
-      }
+      Load.set(true);   // 按下打开
+    }
+    else{
+      Load.set(false);  // 松开关闭
     }
     if(auto_control==1){
       break;
@@ -142,7 +142,7 @@ void Intake_Shoot_ctrl(){
       Shoot(-100); //未测试，目的：使球更快下去
     }
     else if(Controller1.ButtonDown.pressing()){
-      Up.set(false);
+      Up.set(true);
       shoot_ctrl=-1;
       ball_ctrl=0;
       Ball_Intake();
@@ -171,7 +171,7 @@ void Intake_Shoot_ctrl(){
 void Up_ctrl(){
   while(true){
     if(Brain.timer(timeUnits::msec)>500&&mode_ctrl==1){
-      Up.set(true);
+      Up.set(false);
     }
     if(auto_control==1){
       break;
@@ -271,18 +271,30 @@ void hook_auto_ctrl(){
   }
 }
 void anchor_ctrl(){
+  bool target_set = false;  // 是否已设置目标位置
+  
   while(true){
-    if(Controller1.ButtonDown.pressing()){
-      Anchor.set(!Anchor.value());
-      RunStop(hold);
-      while(Controller1.ButtonDown.pressing()){
-        continue;
+    if(Controller1.ButtonRight.pressing()){
+      // 首次按下：记录目标位置
+      if(!target_set) {
+        Anchor_SetTarget();
+        target_set = true;
+      }
+      // 持续执行P控制锁定
+      Anchor_Lock(true);
+    } else {
+      // 按键松开：立即停止锁定
+      if(target_set) {
+        Anchor_Lock(false);
+        RunStop(coast);
+        target_set = false;
       }
     }
+    
     if(auto_control==1){
       break;
     }
-    wait(20, msec);
+    wait(10, msec);  // 10ms控制周期
   }
 }
 void Joystick(void){
@@ -295,6 +307,8 @@ void Joystick(void){
   thread ball_control_thread=thread(Ball_ctrl);
   thread up_control_thread=thread(Up_ctrl);
   thread hook_auto_control_thread=thread(hook_auto_ctrl);
+  //RunStop(hold);
+  thread anchor_control_thread=thread(anchor_ctrl);
   Color.setLightPower(100, percent); 
   Color_2.setLightPower(100, percent);
   Color_3.setLightPower(100, percent);
