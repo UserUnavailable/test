@@ -1,69 +1,23 @@
-  ////X1_A_B_C_E(-1);
-  //C_A();
-  //E_F_E();
-  ////E_D();
-  
-  now=14;
-  Start=Gyro.rotation(degrees)-now*Side;
-  Wing_L.set(true);
-  Get_Ball(2);
-  Run_gyro_new(330);
-  wait(100);
-  Load.set(true);
-  wait(150);
-  Turn_Gyro(130);
-  Run_gyro_new(680);
-  Turn_Gyro(178); 
-  wait(20,msec);
-  Run_wall(30,1300,10);
-  Run_gyro_new(-520);
-  Load.set(false);
-  Get_Ball(1);
-  Run_wall(-5,2000,10);
-  wait(400);
-  Get_Ball(0);
-  Hook();
-
-  
-//右侧
-/*
-
-Load.set(true);
-Turn_Gyro(180);
+now=16;
+Start=Gyro.rotation(degrees)-now*Side;
+Wing_L.set(true);
 Get_Ball(2);
-Run_gyro(50,50,now,false);
-Run_time(50,300);
+Run_gyro_new(330);
 wait(100);
-
-Run_time(50,200);
-Wing_L.set(false);
-wait(100);
-Run_time(60,200);
-wait(500);
-Turn_Gyro(182);
-Run_gyro(410,-80,now,false);
-Run_time(-40,300);
-RunStop(hold);
+Load.set(true);
+wait(150);
+Run_gyro_new(640, 125);
+Turn_Gyro(178); 
+wait(20,msec);
+Run_wall(30,1300,10);
+Run_gyro_new(-520, 180);
 Load.set(false);
-Up.set(true);
-Get_Ball(1);
-auto_color_ctrl=1;
-wait(500);
-Run_time(20,50);
-wait(2050);
+Get_Ball(1);    
+Run_wall(-5,2000,10);
+wait(400);
 Get_Ball(0);
-RunStop(coast);
-Run_gyro(70,30,now);
-//Up.set(false);
-Turn_Gyro(225);
-Run_gyro(200,-30,now);
-Turn_Gyro(180);
-JoyStop();
-wait(100);
-Run_gyro(100,-60,now,false);
-Run_gyro(100,-60,now+5,false);
-Run_gyro(100,-60,now-5,false);
-Turn_Gyro(190);
-RunStop(hold);
-
-*/
+Run_gyro_new(250, 139);
+Wing_L.set(false);
+Turn_Gyro(182);
+Run_gyro(-520, 100, 182);
+Turn_Gyro(227);
