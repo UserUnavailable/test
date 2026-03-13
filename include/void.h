@@ -2168,44 +2168,57 @@ void test_straight(double enc, float g=0)
 
 /**
  * @brief 转向测试函数(含转向日志)
- * @param angle 目标角度
  * 
- * 调用Turn_Gyro转向,同时在后台输出日志
+ * 自动从10度开始,每次增加10度角度差,直到180度
+ * 每次基于当前角度旋转相应角度差,调用Turn_Gyro转向
  * 日志仅保留转向相关列: time, gyro_err, vg, turnpower, left_avg, right_avg
  */
-void test_turn(float angle)
+void test_turn()
 {
-  //清零全局日志变量
-  test_log_menc = 0;
-  test_log_move_err = 0;
-  test_log_vm = 0;
-  test_log_current_power = 0;
-  test_log_gyro_err = 0;
-  test_log_vg = 0;
-  test_log_turnpower = 0;
-
-  //打印测试类型标识
-  printf("test_turn\n");
-
-  //启动日志任务
-  test_log_type = 1; // turn模式
-  test_log_active = true;
-  test_log_task_handle = task(test_log_task_fn);
+  Side=1; 
+  //记录起始角度作为参考
+  float start_angle = Gyro.rotation(degrees);
   
-  //执行PID转向
-  Turn_Gyro(angle);
+  //从20度开始,每次增加20度,直到180度
+  for(int delta = 20; delta <= 180; delta += 20)
+  {
+    //计算目标角度 = 当前角度 + 角度差
+    float target_angle = Gyro.rotation(degrees) + delta;
+    
+    //清零全局日志变量
+    test_log_menc = 0;
+    test_log_move_err = 0;
+    test_log_vm = 0;
+    test_log_current_power = 0;
+    test_log_gyro_err = 0;
+    test_log_vg = 0;
+    test_log_turnpower = 0;
 
-  //Turn_Gyro结束后继续记录0.5秒,确保录到到位过程
-  //vex::task::sleep(500);
+    //打印测试类型标识
+    printf("test_turn (delta=%d deg)\n", delta);
+
+    //启动日志任务
+    test_log_type = 1; // turn模式
+    test_log_active = true;
+    test_log_task_handle = task(test_log_task_fn);
+    vex::task::sleep(50); // 等待日志任务启动并开始记录
+    
+    //执行PID转向
+    Turn_Gyro(target_angle);
+
+    //停止采集任务
+    test_log_active = false;
+    vex::task::sleep(100); //等待采集任务退出
+
+    //一次性输出所有缓冲数据
+    test_log_dump();
+    printf("--- test_turn complete, delta=%d, target=%.1f ---\n", delta, target_angle);
+    
+    //每次测试间隔1秒,等待稳定
+    vex::task::sleep(100);
+  }
   
-  //停止采集任务
-  test_log_active = false;
-  vex::task::sleep(100); //等待采集任务退出
-
-  //一次性输出所有缓冲数据
-  test_log_dump();
-  printf("--- test_turn complete, angle=%.1f ---\n", angle);
-  vex::task::sleep(500); // 块间间隔: 确保complete信息发完且USB buffer排空后再进入下一个test
+  printf("=== All turn tests complete (10-180 deg) ===\n");
 }
 
 

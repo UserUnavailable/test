@@ -2,14 +2,29 @@ now=-14;
 Start=Gyro.rotation(degrees)-now*Side;
 Wing_L.set(true);
 Get_Ball(2);
-Run_gyro_new(490);
+Run_gyro_new(470);
 wait(50);
-Up.set(false);
-Turn_Gyro(-135);
 Load.set(true);
+Up.set(true);
+Turn_Gyro(-135);
 Run_gyro_new(-180);
 Get_Ball(1);
 wait(1000);
+Load.set(false);
+Get_Ball(2);
+Run_gyro_new(50);
+Run_gyro_new(348, -45);
+Run_gyro_new(160, -90);
+wait(50);
+Load.set(true);
+Run_wall(10,300,10);  
+
+Run_gyro_new(-500, 1);
+/*
+Load.set(false);
+Run_wall(20,500,10);
+*/
+
 /*
 Get_Ball(2);
 Run_gyro_new(870);

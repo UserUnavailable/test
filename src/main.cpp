@@ -137,7 +137,7 @@ void pre_auton(void) {
 
 void autonomous(void) {
   //Up.set(true);
-  Basket.set(true);
+  //Basket.set(true);
   auto_control=1;
   driver_control=0;
   ColorThread=thread(Color_Control);
@@ -156,13 +156,11 @@ void autonomous(void) {
 // ..........................................................................
   AutoPro();
   */
-  //Side=1; 
+  
   //Hook();//AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
   //test_gyro_pd(8.0, 0.8);  // 恒速100RPM gyro PD调参: kp=2.0, kd=0.2
   //test_straight(1500);
-  //test_turn(20);
-  //test_turn(110);
-  //test_turn(270);
+  //test_turn();
   //Run_wall(-50,2000,3);
   //test_minspeed();
 
