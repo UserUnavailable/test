@@ -119,7 +119,20 @@ void pre_auton(void) {
   //PrintTask=task(Print);
   //AutoTask=task(AutoScreen);
 
-  AutoScreen();
+  // ===== 调试强制设置 =====
+  // 设置 FORCE_AUTO = 1 强制蓝方Auto1；=0 恢复屏幕选择
+  #define FORCE_AUTO 1
+  
+  #if FORCE_AUTO
+    Auto = 2;        // 自动程序 1
+    Alliance = -1;   // -1=蓝方, 1=红方
+    Side = 1;
+    button = 0;
+    PrintTask=task(Print);
+  #else
+    AutoScreen();    // 正常屏幕选择
+  #endif
+  // ========================
 
   // All activities that occur before the competition starts
   // Example: clearing encoders, setting servo positions, ...
@@ -137,7 +150,7 @@ void pre_auton(void) {
 
 void autonomous(void) {
   //Up.set(true);
-  //Basket.set(true);
+  Basket.set(true);
   auto_control=1;
   driver_control=0;
   ColorThread=thread(Color_Control);
