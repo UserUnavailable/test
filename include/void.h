@@ -480,11 +480,11 @@ void Get_Ball(float spd)//0：停；1：中高桥；-1：低桥；2：吸球.   
     }  
   if (spd==-1) //低桥模式:吸球反转
   {
-    Intake(-100); 
+    Intake(-50); 
     if(!auto_color_divide){
-      Ball(100);
+      Ball(-100);
     }
-    Shoot(100);
+    Shoot(-100);
     auto_color_ctrl=0;
   }  
   if (spd==2) //自动吸球分球模式
@@ -1199,7 +1199,7 @@ void Turn_Gyro(float target)
     //PD计算输出功率
    pow = kp * error + kd * V;
    pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
-   if (fabs(pow) < 14 && fabs(error) > 2) pow = sgn(pow) * 14; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
+   if (fabs(pow) < 14) pow = sgn(pow) * 14; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
 
     // 写入全局变量供测试日志读取
     test_log_gyro_err = error;
@@ -2123,59 +2123,54 @@ void test_log_dump()
  * 每次行驶方向与上次相反（前进/后退交替）
  * 用于独立校准 move_kp / move_kd 参数
  */
-void test_straight()
+/**
+ * @brief 直线行驶测试函数(含统一10列日志)
+ * @param enc 目标编码器值(度), 正值前进, 负值后退
+ * @param g 目标角度(默认0, 即保持当前朝向)
+ * 
+ * 调用Run_gyro行驶,同时在后台每50ms输出:
+ *   time_s, menc, move_err, last_move_error, delta_move_err, vm, dt, current_power, gyro_err, vg, turnpower, left_avg, right_avg
+ */
+void test_straight(double enc, float g=0)
 {
-  // 初始化坐标系
+  //初始化坐标系:当前朝向为0°
   now = 0;
   Start = Gyro.rotation(degrees);
-  
-  // 方向控制：+1=前进, -1=后退
-  int direction = 1;
-  
-  // 循环测试：100, 200, 300... 1200
-  for(int enc = 100; enc <= 1200; enc += 100)
-  {
-    // 清零全局日志变量
-    test_log_menc = 0;
-    test_log_move_err = 0;
-    test_log_vm = 0;
-    test_log_current_power = 0;
-    test_log_gyro_err = 0;
-    test_log_vg = 0;
-    test_log_turnpower = 0;
-    test_log_last_move_error = 0;
-    test_log_delta_move_err = 0;
-    test_log_dt = 0;
 
-    // 打印测试标识
-    printf("test_straight_pure (enc=%d, dir=%s)\n", 
-           enc, direction > 0 ? "forward" : "backward");
+  //清零全局日志变量
+  test_log_menc = 0;
+  test_log_move_err = 0;
+  test_log_vm = 0;
+  test_log_current_power = 0;
+  test_log_gyro_err = 0;
+  test_log_vg = 0;
+  test_log_turnpower = 0;
+  test_log_last_move_error = 0;
+  test_log_delta_move_err = 0;
+  test_log_dt = 0;
 
-    // 启动日志任务
-    test_log_type = 0; // straight模式
-    test_log_active = true;
-    test_log_task_handle = task(test_log_task_fn);
+  //打印测试类型标识
+  printf("test_straight_v2\n"); //版本标记: v2=归一化dt版
 
-    // 执行纯直线行驶（enable_gyro=false 禁用纠偏）
-    Run_gyro_new(enc * direction, 0, false);
+  //启动日志任务@
+  test_log_type = 0; // straight模式
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
 
-    // 停止采集任务
-    test_log_active = false;
-    vex::task::sleep(100);
+  //执行直线行驶(传入目标角度g, 实现弧线行驶)
+  Run_gyro_new(enc, g);
 
-    // 一次性输出所有缓冲数据
-    test_log_dump();
-    printf("--- test_straight complete, enc=%d ---\n", enc);
-    
-    // 间隔等待系统稳定
-    vex::task::sleep(500);
-    
-    // 反转方向，为下次测试做准备
-    direction *= -1;
-  }
-  
-  printf("=== All straight tests complete (100-1200, pure distance PID) ===\n");
-  vex::task::sleep(500);
+  //Run_gyro结束后继续记录1秒,观察完整减速过程
+  //vex::task::sleep(1000);
+
+  //停止采集任务
+  test_log_active = false;
+  vex::task::sleep(100); //等待采集任务退出
+
+  //一次性输出所有缓冲数据
+  test_log_dump();
+  printf("--- test_straight complete, enc=%.1f, g=%.1f ---\n", enc, g);
+  vex::task::sleep(500); // 块间间隔: 确保complete信息发完且USB buffer排空后再进入下一个test
 }
 
 /**

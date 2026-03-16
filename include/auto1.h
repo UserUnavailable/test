@@ -1,3 +1,5 @@
+
+/*9球中杆
 now=-14;
 Start=Gyro.rotation(degrees)-now*Side;
 Wing_L.set(true);
@@ -10,13 +12,14 @@ Run_gyro_new(440, -38);
 Run_gyro_new(140, -90);
 Load.set(true);
 Run_wall(30,200,5);
-Run_gyro_new(-420, -45);
+Run_gyro_new(-440, -45);
+Get_Ball(0);
 Run_gyro_new(-230, -135);
 Up.set(true);
 Get_Ball(1);
 wait(2000);
 Get_Ball(2);
-Run_gyro_new(900, -140);
+Run_gyro_new(920, -143);
 Turn_Gyro(-178);
 Up.set(false);
 Run_wall(30,1000,5);
@@ -29,6 +32,20 @@ Get_Ball(0);
 Run_gyro_new(250, -221);
 //Run_gyro(250, 80, -221);
 Wing_L.set(false);
-Turn_Gyro(-178);
-Run_gyro(-520, 100, -178);
+Turn_Gyro(-180);
+Run_gyro(-520, 100, -180);
 Turn_Gyro(-133);
+*/
+now=-14;
+Start=Gyro.rotation(degrees)-now*Side;
+Wing_L.set(true);
+Get_Ball(2);
+Run_gyro_new(330);
+Load.set(true);
+wait(100);
+Load.set(false);
+Run_gyro_new(440, -38);
+Run_gyro_new(140, -90);
+Load.set(true);
+Run_wall(30,200,5);
+Run_gyro_new(-600, 0);
