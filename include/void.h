@@ -1687,11 +1687,15 @@ void Auto_Ctrl(){
     {
     Brain.Screen.clearScreen();
     Controller1.Screen.clearScreen();
-    //绘制4个蓝色矩形按钮供选择自动程序
-    Brain.Screen.drawRectangle(10,20,100,200,color::blue);
-    Brain.Screen.drawRectangle(130,20,100,200,color::blue);
-    Brain.Screen.drawRectangle(250,20,100,200,color::blue);
-    Brain.Screen.drawRectangle(370,20,100,200,color::blue);
+    //绘制8个蓝色矩形按钮供选择自动程序(上下两排，每排4个)
+    Brain.Screen.drawRectangle(10,20,100,90,color::blue);
+    Brain.Screen.drawRectangle(130,20,100,90,color::blue);
+    Brain.Screen.drawRectangle(250,20,100,90,color::blue);
+    Brain.Screen.drawRectangle(370,20,100,90,color::blue);
+    Brain.Screen.drawRectangle(10,130,100,90,color::blue);
+    Brain.Screen.drawRectangle(130,130,100,90,color::blue);
+    Brain.Screen.drawRectangle(250,130,100,90,color::blue);
+    Brain.Screen.drawRectangle(370,130,100,90,color::blue);
     Side=1;
     Alliance=-1; //设置为蓝方
     AutoChoose=0;
@@ -1701,11 +1705,27 @@ void Auto_Ctrl(){
    {
      Brain.Screen.clearScreen();
      Controller1.Screen.clearScreen();
-     //绘制4个红色矩形按钮供选择自动程序
-     Brain.Screen.drawRectangle(10,20,100,200,color::red);
-     Brain.Screen.drawRectangle(130,20,100,200,color::red);
-     Brain.Screen.drawRectangle(250,20,100,200,color::red);
-     Brain.Screen.drawRectangle(370,20,100,200,color::red);
+     //绘制8个红色矩形按钮供选择自动程序(上下两排，每排4个)
+     Brain.Screen.drawRectangle(10,20,100,90,color::red);
+     Brain.Screen.drawRectangle(130,20,100,90,color::red);
+     Brain.Screen.drawRectangle(250,20,100,90,color::red);
+     Brain.Screen.drawRectangle(370,20,100,90,color::red);
+     Brain.Screen.drawRectangle(10,130,100,90,color::red);
+     Brain.Screen.drawRectangle(130,130,100,90,color::red);
+     Brain.Screen.drawRectangle(250,130,100,90,color::red);
+     Brain.Screen.drawRectangle(370,130,100,90,color::red);
+     
+     // 添加文字标签
+     Brain.Screen.setPenColor(color::white);
+     Brain.Screen.printAt(40, 70, "L1");
+     Brain.Screen.printAt(160, 70, "L2");
+     Brain.Screen.printAt(280, 70, "L3");
+     Brain.Screen.printAt(400, 70, "L4");
+     Brain.Screen.printAt(40, 180, "R1");
+     Brain.Screen.printAt(160, 180, "R2");
+     Brain.Screen.printAt(280, 180, "R3");
+     Brain.Screen.printAt(400, 180, "R4");
+     
      Side=1;
      Alliance=1; //设置为红方
      AutoChoose=0;
@@ -1722,51 +1742,99 @@ void Auto_Ctrl(){
       Brain.Screen.drawCircle(x,y,50); //绘制触摸点
       while(Brain.Screen.pressing()); //等待松开
       
-     if (Brain.Screen.xPosition()>370) //最右侧 - 自动程序4
-    {
-      Brain.Screen.clearScreen();
-      Controller1.Screen.clearLine(1);
-      Controller1.Screen.clearLine(2);
-      Controller1.Screen.clearLine(3);
-      Auto=4;
-      Brain.Screen.printAt(200,100,"4");
-      button=0;
-      PrintTask=task(Print); //启动显示任务
-
-    }
-     else  if ((Brain.Screen.xPosition()>250)) //第三个 - 自动程序3
-    {
-      Brain.Screen.clearScreen();
-      Controller1.Screen.clearLine(1);
-      Controller1.Screen.clearLine(2);
-      Controller1.Screen.clearLine(3);
-      Auto=3;
-      Brain.Screen.printAt(200,100,"3");
-      button=0;
-      PrintTask=task(Print);
-    }
-     else  if ((Brain.Screen.xPosition()>130)) //第二个 - 自动程序2
-    {
-      Brain.Screen.clearScreen();
-      Auto=2; 
-      Controller1.Screen.clearLine(1);
-      Controller1.Screen.clearLine(2);
-      Controller1.Screen.clearLine(3);
-      Brain.Screen.printAt(200,100,"2");
-      button=0;
-      PrintTask=task(Print);
-    }
-      else if ((Brain.Screen.xPosition()>10)) //最左侧 - 自动程序1
-    {
-      Brain.Screen.clearScreen();
-      Auto=1;
-      Controller1.Screen.clearLine(1);
-      Controller1.Screen.clearLine(2);
-      Controller1.Screen.clearLine(3);
-      Brain.Screen.printAt(200,100,"1");
-      button=0;
-      PrintTask=task(Print);
-    }
+     if (y < 120) { // 上排
+        if (x > 370) //最右侧 - 自动程序4
+       {
+         Brain.Screen.clearScreen();
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Auto=4;
+         Brain.Screen.printAt(200,100,"L4");
+         button=0;
+         PrintTask=task(Print); //启动显示任务
+ 
+       }
+        else  if ((x>250)) //第三个 - 自动程序3
+       {
+         Brain.Screen.clearScreen();
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Auto=3;
+         Brain.Screen.printAt(200,100,"L3");
+         button=0;
+         PrintTask=task(Print);
+       }
+        else  if ((x>130)) //第二个 - 自动程序2
+       {
+         Brain.Screen.clearScreen();
+         Auto=2; 
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Brain.Screen.printAt(200,100,"L2");
+         button=0;
+         PrintTask=task(Print);
+       }
+         else if ((x>10)) //最左侧 - 自动程序1
+       {
+         Brain.Screen.clearScreen();
+         Auto=1;
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Brain.Screen.printAt(200,100,"L1");
+         button=0;
+         PrintTask=task(Print);
+       }
+      } else { // 下排
+        if (x > 370) //最右侧 - 自动程序8
+       {
+         Brain.Screen.clearScreen();
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Auto=8;
+         Brain.Screen.printAt(200,100,"R4");
+         button=0;
+         PrintTask=task(Print); //启动显示任务
+ 
+       }
+        else  if ((x>250)) //第三个 - 自动程序7
+       {
+         Brain.Screen.clearScreen();
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Auto=7;
+         Brain.Screen.printAt(200,100,"R3");
+         button=0;
+         PrintTask=task(Print);
+       }
+        else  if ((x>130)) //第二个 - 自动程序6
+       {
+         Brain.Screen.clearScreen();
+         Auto=6; 
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Brain.Screen.printAt(200,100,"R2");
+         button=0;
+         PrintTask=task(Print);
+       }
+         else if ((x>10)) //最左侧 - 自动程序5
+       {
+         Brain.Screen.clearScreen();
+         Auto=5;
+         Controller1.Screen.clearLine(1);
+         Controller1.Screen.clearLine(2);
+         Controller1.Screen.clearLine(3);
+         Brain.Screen.printAt(200,100,"R1");
+         button=0;
+         PrintTask=task(Print);
+       }
+      }
     
             // Brain.Screen.clearScreen();
   }

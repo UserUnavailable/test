@@ -1,5 +1,5 @@
-//左7球高杆
-now=-16;
+//右7球高
+now=16;
 Start=Gyro.rotation(degrees)-now*Side;
 Wing_L.set(true);
 Get_Ball(2);
@@ -7,20 +7,18 @@ Run_gyro_new(330);
 wait(100);
 Load.set(true);
 wait(150);
-Run_gyro_new(640, -130);       
-Turn_Gyro(-180); 
+Run_gyro_new(640, 130);
+Turn_Gyro(180); 
 wait(20,msec);
 Run_wall(30,1300,10);
-Run_gyro_new(-520, -180);
+Run_gyro_new(-520, 180);
 Load.set(false);
 Get_Ball(1);    
 Run_wall(-5,2000,10);
 wait(400);
 Get_Ball(0);
-Run_gyro_new(250, -221);
+Run_gyro_new(250, 139);
 Wing_L.set(false);
-Turn_Gyro(-180);
-Run_gyro(-520, 100, -180);
-Turn_Gyro(-133);
-
-
+Turn_Gyro(182);
+Run_gyro(-520, 100, 180);
+Turn_Gyro(227);

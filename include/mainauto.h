@@ -16,6 +16,22 @@ void Auto_4()
  //#include "auto_skill.h"
  #include "auto4.h"  
 }
+void Auto_5()
+{
+ #include "auto5.h"  
+}
+void Auto_6()
+{
+ #include "auto6.h"  
+}
+void Auto_7()
+{
+ #include "auto7.h"  
+}
+void Auto_8()
+{
+ #include "auto8.h"  
+}
 
 /////////////////////////////////////////////
 void AutoPro ()
@@ -37,6 +53,14 @@ Side=1;
  {Auto_3();}
  if (Auto==4)
  {Auto_4();}
+ if (Auto==5)
+ {Auto_5();}
+ if (Auto==6)
+ {Auto_6();}
+ if (Auto==7)
+ {Auto_7();}
+ if (Auto==8)
+ {Auto_8();}
  Auto_time=Brain.timer(timeUnits::sec);
  Brain.Screen.clearScreen();
  Brain.Screen.print(Brain.timer(timeUnits::sec));
