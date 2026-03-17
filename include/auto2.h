@@ -1,3 +1,4 @@
+
 now=16;
 Start=Gyro.rotation(degrees)-now*Side;
 Wing_L.set(true);

@@ -1199,7 +1199,7 @@ void Turn_Gyro(float target)
     //PD计算输出功率
    pow = kp * error + kd * V;
    pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
-   if (fabs(pow) < 14) pow = sgn(pow) * 14; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
+   if (fabs(pow) < 15) pow = sgn(pow) * 15; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
 
     // 写入全局变量供测试日志读取
     test_log_gyro_err = error;
