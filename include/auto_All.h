@@ -23,8 +23,6 @@ void C_A()//出发吸面前3球和中线球，退到中桥前
   Run_gyro(100,50,now);//前进到球堆
   Load.set(true);//收起填装杆
   Run_gyro(120,50,now);//前进到球堆
-  mode=1;
-  BallTask=task(Intake_Color);
   wait(100);
   Run_gyro(30,-30,now);//
   Load.set(false);//收起填装杆
@@ -54,9 +52,7 @@ void X1_A_B_C_E(int dir)//出发吸面前3球和中线球，退到中桥前
   Run_gyro(50,50,now);//前进到球堆
   Turn_Gyro(-18);//转向面对堆
   Get_Ball(2);///0：停；1：中高桥；-1：低桥；2：吸球
-  mode=1;
-  BallTask=task(Intake_Color);
-  Run_gyro(250,60,now);//前进到球堆
+  wait(100);Run_gyro(250,60,now);//前进到球堆
   Load.set(true);
   Run_gyro(100,60,now);//前进到球堆
   Turn_Gyro(-65);//转向面对堆
@@ -111,9 +107,6 @@ void E_F_E()//从中桥到填装区到长桥
   wait(100);
   Turn_Gyro(flag_start+90);//转向面对长桥
   Run_gyro(250,60,now);
-  mode=1;
-  BallTask=task(Intake_Color);
-  Run_time(30,200); 
   wait(100);
   Run_gyro(170,-60,now);
 
@@ -140,8 +133,6 @@ void E_D()//从中桥到填装区到长桥
   Get_Ball(2);//0：停；1：中高桥；-1：低桥；2：吸球
   Run_time(-30,100);
   Turn_Gyro(now);
-  mode=1;
-  BallTask=task(Intake_Color);
   //
   Run_gyro(100,50,now);
 
@@ -168,7 +159,7 @@ void E_D()//从中桥到填装区到长桥
   wait(50);
   }
   Run(-30);
-  task::stop (BallTask);
+
   Get_Ball(1);//0：停；1：中高桥；-1：低桥；2：吸球
   while (Brain.timer(timeUnits::sec)<=14.8){}
   Up.set(false);

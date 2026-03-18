@@ -4,7 +4,6 @@
   //Run_gyro(100,-40,now);
   Load.set(true);
   wait(100);
-  mode=1;
   Intake(100);
   Ball(100);
   Shoot(100); //开启吸球

@@ -95,8 +95,6 @@ void E_F_E()//从中桥到填装区到长桥
   wait(100);
   Turn_Gyro(-90);//转向面对长桥
   Run_gyro(250,60,now);
-  mode=1;
-  BallTask=task(Intake_Color);
   Run_time(30,200); 
   wait(100);
   Run_gyro(170,-60,now);
@@ -108,7 +106,7 @@ void E_D()//从中桥到填装区到长桥
   wait(100);
   Turn_Gyro(0);//转向面对长桥
   Run_gyro(200,-60,now);//后退到长桥
-  //task::stop (BallTask);
+
   Run_time(-40,200);
   Up.set(true);
   Shoot(100);
@@ -124,8 +122,6 @@ void E_D()//从中桥到填装区到长桥
   Get_Ball(2);//0：停；1：中高桥；-1：低桥；2：吸球
   Run_time(-30,100);
   Turn_Gyro(0);
-  mode=1;
-  BallTask=task(Intake_Color);
   //
   Run_gyro(100,50,now);
 
@@ -153,7 +149,7 @@ void E_D()//从中桥到填装区到长桥
   wait(50);
   }
   Run(-30);
-  task::stop (BallTask);
+
   Get_Ball(1);//0：停；1：中高桥；-1：低桥；2：吸球
   while (Brain.timer(timeUnits::sec)<=14.8){}
   Up.set(false);

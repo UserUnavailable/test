@@ -105,7 +105,7 @@ void load_ctrl(){
 void Intake_Shoot_ctrl(){
   while(true){
     if(Controller1.ButtonR1.pressing()){
-      Ball_Intake();
+      auto_color_ctrl=1; // 开启统一的颜色筛选
       ball_ctrl=0;            //可能会导致一边吸球一边吐球时由于筛选导致吐球不顺
       intake_ctrl=1;
       if(shoot_ctrl==1){
@@ -145,7 +145,7 @@ void Intake_Shoot_ctrl(){
       Up.set(true);
       shoot_ctrl=-1;
       ball_ctrl=0;
-      Ball_Intake();
+      auto_color_ctrl=1; // 开启统一的颜色筛选
       Shoot(50);
       Brain.Timer.clear();
       mode_ctrl=1;
@@ -153,12 +153,13 @@ void Intake_Shoot_ctrl(){
     if(Controller1.ButtonR2.pressing()){
         shoot_ctrl=-1;
         ball_ctrl=0;
-        Ball_Intake();
+        auto_color_ctrl=1; // 开启统一的颜色筛选
         Shoot(100);          
     }
     else{
       if((!Controller1.ButtonR1.pressing())&&(!Controller1.ButtonB.pressing())&&(!Controller1.ButtonDown.pressing())){
         ball_ctrl=1;
+        auto_color_ctrl=0; // 松开按键时关闭自动颜色筛选
       }
       shoot_ctrl=1;
     }

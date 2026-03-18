@@ -68,6 +68,6 @@ Side=1;
  Controller1.Screen.setCursor(3,1);
  Controller1.Screen.print(Auto_time);
  driver_control=1;
- task::stop (BallTask);
+
 }
 

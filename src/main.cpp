@@ -74,7 +74,7 @@ Brain.resetTimer();
 ///////////////////////////////测试内容///////////////////////////////
 //#include "auto_skill.h" 
   // safe=2;
-  // BallTask=task(Intake_Color);
+
 //Turn_Gyro(20);
 AutoPro();//手动放自动的点
 //////////////////////////////////////////////////////////////////////
@@ -196,7 +196,7 @@ void usercontrol(void) {
   //Up.set(true);
   Basket.set(true);
   RunStop(coast);
-  task::stop (BallTask);
+
   task::stop (AutoTask);
   driver_control=1;
   auto_control=0;
