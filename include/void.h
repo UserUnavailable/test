@@ -330,9 +330,9 @@ void Color_Control(){
       else if(Alliance==1){ //红方:保留红球,排出蓝球
         if(Color_2.color()==blue){   //靠下传感器检测到蓝球
           auto_color_divide=1;
-          Ball(-100);  //反转排出
-          Intake(0);  //降低吸球速度
-          wait(150, msec); // 防抖延时
+          Ball(-80);  //反转排出
+          Intake(20);  //降低吸球速度
+          wait(80, msec); // 防抖延时
         }
         else if(Color_2.color()==red){ //检测到红球
           auto_color_divide=0;
@@ -341,9 +341,9 @@ void Color_Control(){
         }
         else if(Color.color()==blue&&Color.isNearObject()){ //靠上传感器检测到蓝球
           auto_color_divide=1;
-          Ball(-100);  //反转排出
-          Intake(0);
-          wait(150, msec); // 防抖延时
+          Ball(-80);  //反转排出
+          Intake(20);
+          wait(80, msec); // 防抖延时
         }
         else if(Color.color()==red&&Color.isNearObject()){ //检测到红球
           auto_color_divide=0;
@@ -353,7 +353,7 @@ void Color_Control(){
         else{ //未检测到球
           auto_color_divide=0;
           Ball(100);
-          Intake(100);
+          Intake(80);
         }
       }
       else if(Alliance==-1){ //蓝方:保留蓝球,排出红球
@@ -364,9 +364,9 @@ void Color_Control(){
         }
         else if(Color_2.color()==red){ //检测到红球
           auto_color_divide=1;
-          Ball(-100);  //反转排出
-          Intake(0);  //降低吸球速度
-          wait(150, msec); // 防抖延时
+          Ball(-80);  //反转排出
+          Intake(20);  //降低吸球速度
+          wait(80, msec); // 防抖延时
         }
         else if(Color.color()==blue&&Color.isNearObject()){ //上传感器检测到蓝球
           auto_color_divide=0;
@@ -375,9 +375,9 @@ void Color_Control(){
         }
         else if(Color.color()==red&&Color.isNearObject()){ //检测到红球
           auto_color_divide=1;
-          Ball(-100);  //反转排出
-          Intake(0);
-          wait(150, msec); // 防抖延时
+          Ball(-80);  //反转排出
+          Intake(20);
+          wait(80, msec); // 防抖延时
         }
         else{ //未检测到球
           auto_color_divide=0;
@@ -469,38 +469,34 @@ void Get_Ball(float spd)//0：停；1：中高桥；-1：低桥；2：吸球.   
 {
   if (spd==0) //停止模式
   {
+    auto_color_ctrl=0; //关闭颜色控制
     Intake(0);
     Ball(0);
     Shoot(0);
-    auto_color_ctrl=0; //关闭颜色控制
-    }
+  }
   if (spd==1) //中高桥模式:全速正转
   {
-    Intake(100);
-    if(!auto_color_divide){
-      Ball(100);     
-    }
-    Shoot(100); 
     auto_color_ctrl=0;
-    }  
+    Intake(100);
+    Ball(100);     
+    Shoot(100); 
+  }  
   if (spd==-1) //低桥模式:吸球反转
   {
-    Intake(-50); 
-    if(!auto_color_divide){
-      Ball(-100);
-    }
-    Shoot(-100);
     auto_color_ctrl=0;
+    Intake(-100); 
+    Ball(-100);
+    Shoot(-100);
   }  
   if (spd==2) //自动吸球分球模式
   {
+    auto_color_ctrl=1; //开启颜色识别
     Intake(100); 
     if(!auto_color_divide){
       Ball(100);
     }
     Shoot(-50);  //射球轮反转
-    auto_color_ctrl=1; //开启颜色识别
-    }
+  }
 }
 
 void FAuto_Get_Ball(float spd)//0：停；1：中高桥；-1：低桥；2：吸球
@@ -1018,6 +1014,17 @@ void Dis_Run_gyro(double dis, double power, float g, int sensor_id, bool reverse
 
 //////////////////////////////////////////////////////////////////////////////////
 /**
+ * @brief 将角度归一化到[-180, 180]区间，用于最短路径计算
+ * @param angle 输入角度
+ * @return 归一化后的角度
+ */
+float reduce_negative_180_to_180(float angle) {
+    while(angle > 180) angle -= 360;
+    while(angle < -180) angle += 360;
+    return angle;
+}
+
+/**
  * @brief 陀螺仪PID转向控制
  * @param target 目标角度
  * 使用自适应PID算法,根据误差大小动态调整参数
@@ -1027,49 +1034,50 @@ void Turn_Gyro(float target)
 {
    now=target;
    target=Side*target+Start; //根据场地方向调整目标角度
-   float error = target - Gyro.rotation(degrees) ;//与目标角度距离
+   float error = reduce_negative_180_to_180(target - Gyro.rotation(degrees)); //最短路径误差计算
    
    //PD参数(kp/kd在循环内根据误差动态调整)
    float kp, kd;
-   float dtol = 0.2;  //停止速度阈值
+   float dtol = 0.5;  //停止速度阈值 (根据计划调整为0.5配合稳定时间)
    float errortolerance = 2; //角度误差容忍度
    float lim =100;    //功率限幅
    
    float lasterror;   //上一次角度误差
    float V= 0;        //角速度(微分项)
-   bool arrived;      //到达目标标志
+   
    float Time=Brain.timer(timeUnits::sec);
    float timeout=fabs(error/50); //根据角度计算超时时间
    if (timeout>3 || timeout!=timeout) timeout=3; // 上限3秒,避免占满自动阶段; NaN时也用3
    float pow;         //实际输出功率
    
-   lasterror = error;
-   arrived = error == 0;
-   
-   while (!arrived)
-   {
-    error = target - Gyro.rotation(degrees) ;
-   V = error - lasterror; //计算角速度(微分)
-   lasterror = error;
+   float time_settled = 0; //新增：稳定计时器
+   float settle_time_req = 200; //新增：稳定时间要求(ms)
 
-  //自适应kp/kd：恢复中高kd保证制动力，振荡问题靠降低最低功率clamp解决
-  kp = fabs(error) > 120 ? 2.8 : (fabs(error) > 30 ? 3.0 : 3.4);
-  kd = fabs(error) > 120 ? 30  : (fabs(error) > 30 ? 24  : 20);
-    
-    //提前退出判断:角度误差小且电机基本停止
-    if (fabs(error)<=1)
-    {
-      if(fabs(RightRun_1.velocity(velocityUnits::rpm))<5||fabs(LeftRun_1.velocity(velocityUnits::rpm))<5){break;}
-    }
-    
-    //到达判断:误差和速度都在容忍范围内,或超时
-    if ((fabs(error) <= errortolerance && fabs(V) <= dtol) || (Brain.timer(timeUnits::sec)-Time)>=timeout+1)
-    {arrived = true;}
+   lasterror = error;
+   
+   while (true)
+   {
+    error = reduce_negative_180_to_180(target - Gyro.rotation(degrees)); //最短路径误差计算
+    V = error - lasterror; //计算角速度(微分)
+    lasterror = error;
+
+  // 自适应kp/kd：调整以减少过冲和振荡
+  // 小角度(<=30): 降低kp，增大kd以增加阻尼
+  // 中角度(30-90): 保持适中
+  // 大角度(>90): 稍微增加kp以保证速度，增大kd以提前减速
+  kp = fabs(error) > 90 ? 3.0 : (fabs(error) > 30 ? 2.8 : 2.5);
+  kd = fabs(error) > 90 ? 35.0 : (fabs(error) > 30 ? 28.0 : 25.0);
     
     //PD计算输出功率
    pow = kp * error + kd * V;
    pow = fabs(pow) > lim ? sgn(pow) * lim : pow; //功率限幅
-   if (fabs(pow) < 15) pow = sgn(pow) * 15; //最低功率保底（error>2时保证14功率克服摩擦，error≤2时PID自由控制防ping-pong）
+   
+   // 最低功率保底：只在误差较大时提供，误差很小时允许0功率，依靠动能和I/D项（如果有的话）自然停止，防止ping-pong
+   if (fabs(pow) < 12 && fabs(error) > 1.5) {
+       pow = sgn(pow) * 12; // 稍微降低最低功率从15到12
+   } else if (fabs(error) <= 1.5 && fabs(pow) < 5) {
+       pow = 0; // 误差极小时，如果计算功率很小，直接给0，依靠稳定时间退出
+   }
 
     // 写入全局变量供测试日志读取
     test_log_gyro_err = error;
@@ -1077,7 +1085,18 @@ void Turn_Gyro(float target)
     test_log_turnpower = pow;
 
     Turn(pow);
-    //lasterror = error;
+    
+    // 稳定退出检测 (Settling Logic)
+    if (fabs(error) <= errortolerance && fabs(V) <= dtol) {
+        time_settled += 10;
+    } else {
+        time_settled = 0;
+    }
+
+    if (time_settled >= settle_time_req || (Brain.timer(timeUnits::sec) - Time) >= timeout + 1) {
+        break;
+    }
+    
     wait(10,msec);
   }
    RunStop(brake);

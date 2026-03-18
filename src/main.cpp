@@ -120,11 +120,11 @@ void pre_auton(void) {
   //AutoTask=task(AutoScreen);
 
   // ===== 调试强制设置 =====
-  // 设置 FORCE_AUTO = 1 强制蓝方Auto1；=0 恢复屏幕选择
-  #define FORCE_AUTO 1
+  // 设置 FORCE_AUTO ；=0 恢复屏幕选择
+  #define FORCE_AUTO 0
   
   #if FORCE_AUTO
-    Auto = 1;        // 自动程序 1
+    Auto = 0;        // 自动程序 1
     Alliance = -1;   // -1=蓝方, 1=红方
     Side = 1;
     button = 0;
