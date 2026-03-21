@@ -45,6 +45,7 @@ APP_DIR = Path(__file__).resolve().parent
 # ============================================================================
 
 TEST_HEADERS: dict[str, str] = {
+    "telemetry_v1": "time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out",
     "test_straight_v2": "time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_straight":    "time_s,menc,move_err,vm,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_turn":        "time_s,gyro_err,vg,turnpower,left_avg,right_avg",
@@ -98,11 +99,18 @@ def parse_blocks(text: str) -> list[TestBlock]:
 
     while i < len(lines):
         line = lines[i].strip()
-        if line not in TEST_HEADERS:
+        
+        test_type = None
+        for key in sorted(TEST_HEADERS.keys(), key=len, reverse=True):
+            if line == key or line.startswith(key + " "):
+                test_type = key
+                break
+                
+        if not test_type:
             i += 1
             continue
 
-        test_type = line
+        extra_info = line[len(test_type):].strip()
         expected_header = TEST_HEADERS[test_type]
         ncols = len(expected_header.split(","))
         i += 1
@@ -116,7 +124,8 @@ def parse_blocks(text: str) -> list[TestBlock]:
         corrupted = False
         while i < len(lines):
             row = lines[i].strip()
-            if not row or row.startswith("---") or row in TEST_HEADERS:
+            is_new_test = any(row == k or row.startswith(k + " ") for k in TEST_HEADERS)
+            if not row or row.startswith("---") or is_new_test:
                 break
             if _is_csv_data(row, ncols):
                 csv_rows.append(row)
@@ -131,6 +140,9 @@ def parse_blocks(text: str) -> list[TestBlock]:
         expected_samples = -1
         while i < len(lines):
             row = lines[i].strip()
+            if not row:
+                i += 1
+                continue
             if row.startswith("---"):
                 if "complete" in row:
                     meta = row
@@ -143,6 +155,8 @@ def parse_blocks(text: str) -> list[TestBlock]:
                 m_match = _RE_TOTAL_SAMPLES.search(row)
                 if m_match:
                     expected_samples = int(m_match.group(1))
+                i += 1
+                continue
             break
 
         if expected_samples < 0 and corrupted:
@@ -156,7 +170,8 @@ def parse_blocks(text: str) -> list[TestBlock]:
             csv_text = expected_header + "\n" + "\n".join(csv_rows)
             try:
                 df = pd.read_csv(io.StringIO(csv_text))
-                blocks.append(TestBlock(test_type=test_type, df=df, meta=meta))
+                blk_meta = extra_info + (" | " + meta if meta else "") if extra_info else meta
+                blocks.append(TestBlock(test_type=test_type, df=df, meta=blk_meta))
             except Exception:
                 pass
 
@@ -684,8 +699,89 @@ function renderMinspeed(div, trial) {
   Plotly.newPlot(div, data, layout, plotConfig);
 }
 
+// ============================
+// Chart: telemetry_v1
+// ============================
+function renderTelemetryV1(div, trial) {
+  const t = trial.columns.time_s;
+  const c = trial.columns;
+  const action = c.action && c.action.length > 0 ? c.action[0] : -1;
+  const d1 = [0.76, 0.98], d2 = [0.40, 0.62], d3 = [0, 0.22];
+  const xL = [0, 0.47], xR = [0.53, 1.0], yT = [0.60, 0.98], yB = [0, 0.38];
+  
+  if (action === 1) { // Turn
+    const data = [
+      { x: t, y: c.current, name: 'Current Angle', type:'scatter', mode:'lines', line:{color:C.BLUE,width:1.5}, xaxis:'x', yaxis:'y' },
+      { x: t, y: c.target, name: 'Target', type:'scatter', mode:'lines', line:{color:C.TEAL,width:1.2,dash:'dash'}, xaxis:'x', yaxis:'y' },
+      { x: t, y: c.error, name: 'Error', type:'scatter', mode:'lines', line:{color:C.RED,width:1.2,dash:'dot'}, xaxis:'x', yaxis:'y' },
+      
+      { x: t, y: c.p_out, name: 'P Out', type:'scatter', mode:'lines', line:{color:C.PINK,width:1.2}, xaxis:'x2', yaxis:'y2' },
+      { x: t, y: c.i_out, name: 'I Out', type:'scatter', mode:'lines', line:{color:C.YELLOW,width:1.2}, xaxis:'x2', yaxis:'y2' },
+      { x: t, y: c.d_out, name: 'D Out', type:'scatter', mode:'lines', line:{color:C.GREEN,width:1.2}, xaxis:'x2', yaxis:'y2' },
+      { x: t, y: c.total_out, name: 'Total Power', type:'scatter', mode:'lines', line:{color:C.BLUE,width:1.5,dash:'dash'}, xaxis:'x2', yaxis:'y2' },
+
+      { x: t, y: c.error_deriv, name: 'Ang Vel (vg)', type:'scatter', mode:'lines', line:{color:C.MAUVE,width:1.5}, xaxis:'x3', yaxis:'y3' },
+
+      { x: t, y: c.left_avg, name: 'Left RPM', type:'scatter', mode:'lines', line:{color:C.PEACH,width:1.5}, xaxis:'x4', yaxis:'y4' },
+      { x: t, y: c.right_avg, name: 'Right RPM', type:'scatter', mode:'lines', line:{color:C.BLUE,width:1.5}, xaxis:'x4', yaxis:'y4' },
+    ];
+    const layout = Object.assign(baseLayout('', 800), {
+      xaxis:  axisStyle('Time (s)', { domain: xL, anchor:'y' }),
+      xaxis2: axisStyle('Time (s)', { domain: xR, anchor:'y2' }),
+      xaxis3: axisStyle('Time (s)', { domain: xL, anchor:'y3' }),
+      xaxis4: axisStyle('Time (s)', { domain: xR, anchor:'y4' }),
+      yaxis:  axisStyle('Angle (deg)', { domain: yT, anchor:'x' }),
+      yaxis2: axisStyle('Power (%)',   { domain: yT, anchor:'x2' }),
+      yaxis3: axisStyle('deg/s',       { domain: yB, anchor:'x3' }),
+      yaxis4: axisStyle('RPM',         { domain: yB, anchor:'x4' }),
+      annotations: [
+        { text: '<b>Angle Tracking</b>', x: 0.235, y: 1.0, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+        { text: '<b>PID Breakdown</b>',  x: 0.765, y: 1.0, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+        { text: '<b>Angular Velocity</b>', x: 0.235, y: 0.42, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+        { text: '<b>Motor Speed</b>',      x: 0.765, y: 0.42, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+      ],
+    });
+    Plotly.newPlot(div, data, layout, plotConfig);
+  } else { // Run / Straight
+    const data = [
+      { x: t, y: c.current, name: 'Enc pos', type:'scatter', mode:'lines', line:{color:C.BLUE,width:1.5}, xaxis:'x', yaxis:'y' },
+      { x: t, y: c.target, name: 'Target', type:'scatter', mode:'lines', line:{color:C.TEAL,width:1.2,dash:'dash'}, xaxis:'x', yaxis:'y' },
+      { x: t, y: c.error, name: 'Dist Err', type:'scatter', mode:'lines', line:{color:C.RED,width:1.2,dash:'dot'}, xaxis:'x', yaxis:'y' },
+      
+      { x: t, y: c.p_out, name: 'P Out', type:'scatter', mode:'lines', line:{color:C.PINK,width:1.2}, xaxis:'x2', yaxis:'y2' },
+      { x: t, y: c.d_out, name: 'D Out', type:'scatter', mode:'lines', line:{color:C.GREEN,width:1.2}, xaxis:'x2', yaxis:'y2' },
+      { x: t, y: c.total_out, name: 'Move Power', type:'scatter', mode:'lines', line:{color:C.BLUE,width:1.5}, xaxis:'x2', yaxis:'y2' },
+
+      { x: t, y: c.aux_error, name: 'Gyro Err (deg)', type:'scatter', mode:'lines', line:{color:C.YELLOW,width:1.5}, xaxis:'x3', yaxis:'y3' },
+      { x: t, y: c.aux_out, name: 'Turn Comp', type:'scatter', mode:'lines', line:{color:C.MAUVE,width:1.2,dash:'dash'}, xaxis:'x3', yaxis:'y5' },
+
+      { x: t, y: c.left_avg, name: 'Left RPM', type:'scatter', mode:'lines', line:{color:C.PEACH,width:1.5}, xaxis:'x4', yaxis:'y4' },
+      { x: t, y: c.right_avg, name: 'Right RPM', type:'scatter', mode:'lines', line:{color:C.BLUE,width:1.5}, xaxis:'x4', yaxis:'y4' },
+    ];
+    const layout = Object.assign(baseLayout('', 800), {
+      xaxis:  axisStyle('Time (s)', { domain: xL, anchor:'y' }),
+      xaxis2: axisStyle('Time (s)', { domain: xR, anchor:'y2' }),
+      xaxis3: axisStyle('Time (s)', { domain: xL, anchor:'y3' }),
+      xaxis4: axisStyle('Time (s)', { domain: xR, anchor:'y4' }),
+      yaxis:  axisStyle('Distance',    { domain: yT, anchor:'x' }),
+      yaxis2: axisStyle('Power (%)',   { domain: yT, anchor:'x2' }),
+      yaxis3: axisStyle('Angle (deg)', { domain: yB, anchor:'x3', titlefont:{color:C.YELLOW}, tickfont:{color:C.YELLOW} }),
+      yaxis5: axisStyle('Turn Pwr (%)',{ domain: yB, anchor:'x3', overlaying:'y3', side:'right', showgrid:false, titlefont:{color:C.MAUVE}, tickfont:{color:C.MAUVE} }),
+      yaxis4: axisStyle('RPM',         { domain: yB, anchor:'x4' }),
+      annotations: [
+        { text: '<b>Distance Tracking</b>', x: 0.235, y: 1.0, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+        { text: '<b>Drive Power</b>',       x: 0.765, y: 1.0, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+        { text: '<b>Heading Correction</b>',x: 0.235, y: 0.42, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+        { text: '<b>Motor Speed</b>',       x: 0.765, y: 0.42, xref:'paper', yref:'paper', showarrow: false, font:{color:C.TEXT,size:12} },
+      ],
+    });
+    Plotly.newPlot(div, data, layout, plotConfig);
+  }
+}
+
 // Dispatch
 const RENDERERS = {
+  'telemetry_v1': renderTelemetryV1,
   'test_turn': renderTurn,
   'test_straight': renderStraight,
   'test_straight_v2': renderStraight,

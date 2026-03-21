@@ -31,7 +31,7 @@
 // ---- END VEXCODE CONFIGURED DEVICES ----
 
 //////////////////////////////////////////////////////////
-#include <random>
+// #include <random>
 int Load_Dis=240;//撞板后退到填装桶距离
 
 int Load_Deg=0;//取填装后转向长桥角度
@@ -124,8 +124,8 @@ void pre_auton(void) {
   #define FORCE_AUTO 0
   
   #if FORCE_AUTO
-    Auto = 0;        // 自动程序 1
-    Alliance = -1;   // -1=蓝方, 1=红方
+    Auto = 4;        // 自动程序 1
+    Alliance = 1;   // -1=蓝方, 1=红方
     Side = 1;
     button = 0;
     PrintTask=task(Print);
@@ -156,7 +156,7 @@ void autonomous(void) {
   ColorThread=thread(Color_Control);
   Anchor.set(false);
 // ..........................................................................
-  AutoPro();
+  //AutoPro();
   //Side=1;
   //Hook();
 
@@ -173,7 +173,7 @@ void autonomous(void) {
   //Hook();//AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
   //test_gyro_pd(8.0, 0.8);  // 恒速100RPM gyro PD调参: kp=2.0, kd=0.2
   // test_straight();
-  //test_turn();
+  test_turn();
   //Run_wall(-50,2000,3);
   //test_minspeed();
 

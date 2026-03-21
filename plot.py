@@ -94,6 +94,7 @@ C_DIM    = "#585b70"
 # --- Data structures ----------------------------------------------------------
 
 TEST_HEADERS: dict[str, str] = {
+    "telemetry_v1": "time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out",
     "test_straight_v2": "time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_straight": "time_s,menc,move_err,vm,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_turn":     "time_s,gyro_err,vg,turnpower,left_avg,right_avg",
@@ -247,6 +248,124 @@ def parse_blocks(text: str) -> list[TestBlock]:
 
     return blocks
 
+
+# --- Plot: telemetry_v1 -----------------------------------------------------
+
+def plot_telemetry_v1(blk: TestBlock, idx: int) -> plt.Figure:
+    """
+    Unified telemetry plot based on action type.
+    """
+    df, meta = blk.df, blk.meta
+    t = df["time_s"]
+    action = df["action"].iloc[0] if not df.empty else -1
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharex=True)
+    
+    if action == 1: # Turn
+        fig.suptitle(f"Turn PID Test (telemetry_v1)  #{idx + 1}", fontsize=14, fontweight="bold", y=0.97)
+        # TL: Angle & Error
+        ax = axes[0, 0]
+        ax.plot(t, df["current"], color=C_BLUE, lw=1.5, label="Gyro Angle (deg)")
+        ax.plot(t, df["target"], color=C_TEAL, lw=1.2, ls="--", label="Target")
+        ax.plot(t, df["error"], color=C_RED, lw=1.2, ls=":", label="Error")
+        ax.set_ylabel("Degrees")
+        ax.set_title("Angle Tracking")
+        ax.legend(loc="center right")
+
+        # TR: P, I, D Components
+        ax = axes[0, 1]
+        ax.plot(t, df["p_out"], color=C_PINK, lw=1.2, label="P Out")
+        ax.plot(t, df["i_out"], color=C_YELLOW, lw=1.2, label="I Out")
+        ax.plot(t, df["d_out"], color=C_GREEN, lw=1.2, label="D Out")
+        ax.plot(t, df["total_out"], color=C_BLUE, lw=1.5, ls="--", label="Total Power")
+        ax.set_ylabel("Power (%)")
+        ax.set_title("PID Breakdown")
+        ax.legend(loc="upper right")
+
+        # BL: Velocity (Error Deriv)
+        ax = axes[1, 0]
+        ax.plot(t, df["error_deriv"], color=C_MAUVE, lw=1.5, label="Angle Velocity (vg)")
+        ax.axhline(0, color=C_DIM, lw=1)
+        ax.set_ylabel("deg/s")
+        ax.set_xlabel("Time (s)")
+        ax.set_title("Angular Velocity")
+        ax.legend(loc="upper right")
+
+        # BR: Motor RPM
+        ax = axes[1, 1]
+        ax.plot(t, df["left_avg"], color=C_PEACH, lw=1.5, label="Left Avg RPM")
+        ax.plot(t, df["right_avg"], color=C_BLUE, lw=1.5, label="Right Avg RPM")
+        ax.set_ylabel("RPM")
+        ax.set_xlabel("Time (s)")
+        ax.set_title("Motor Speed")
+        ax.legend(loc="upper left")
+
+    elif action == 3: # MinSpeed
+        fig.suptitle(f"MinSpeed Test (telemetry_v1)  #{idx + 1}", fontsize=14, fontweight="bold", y=0.97)
+        # Just use top left for diff and bottom left for power step
+        ax = axes[0, 0]
+        ax.plot(t, df["error"], color=C_RED, lw=1.5, label="RPM Diff (Actual - Theory)")
+        ax.set_ylabel("RPM Diff")
+        ax.set_title("RPM Tracking Error")
+        ax.legend(loc="upper right")
+
+        ax2 = axes[1, 0]
+        ax2.plot(t, df["target"], color=C_YELLOW, lw=1.5, label="Power Target (%)")
+        ax2.set_ylabel("Power (%)")
+        ax2.set_xlabel("Time (s)")
+        ax2.set_title("Power Step")
+        
+        ax3 = axes[0, 1]
+        ax3.plot(t, df["current"], color=C_BLUE, lw=1.5, label="Actual RPM")
+        ax3.set_ylabel("RPM")
+        ax3.set_title("Measured Speed")
+
+        axes[1, 1].axis("off") # hide 4th plot
+
+    else: # Run (action == 2) or other
+        fig.suptitle(f"Straight PID Test (telemetry_v1)  #{idx + 1}", fontsize=14, fontweight="bold", y=0.97)
+        # TL: Distance & Error
+        ax = axes[0, 0]
+        ax.plot(t, df["current"], color=C_BLUE, lw=1.5, label="Encoder pos (deg)")
+        ax.plot(t, df["target"], color=C_TEAL, lw=1.2, ls="--", label="Target")
+        ax.plot(t, df["error"], color=C_RED, lw=1.2, ls=":", label="Remaining dist")
+        ax.set_ylabel("Degrees")
+        ax.set_title("Position Tracking")
+        ax.legend(loc="center right")
+
+        # TR: Distance PID Power
+        ax = axes[0, 1]
+        ax.plot(t, df["p_out"], color=C_PINK, lw=1.2, label="Move P")
+        ax.plot(t, df["d_out"], color=C_GREEN, lw=1.2, label="Move D")
+        ax.plot(t, df["total_out"], color=C_BLUE, lw=1.5, label="Move Total Power")
+        ax.set_ylabel("Power (%)")
+        ax.set_title("Drive Power")
+        ax.legend(loc="upper right")
+
+        # BL: Aux (Gyro) Error & Out
+        ax = axes[1, 0]
+        ax.plot(t, df["aux_error"], color=C_YELLOW, lw=1.5, label="Gyro Err (deg)")
+        ax2 = ax.twinx()
+        ax2.plot(t, df["aux_out"], color=C_MAUVE, lw=1.2, ls="--", label="Turn Comp Pwr")
+        ax.set_ylabel("Gyro Error (deg)", color=C_YELLOW)
+        ax2.set_ylabel("Turn Power (%)", color=C_MAUVE)
+        ax.set_xlabel("Time (s)")
+        ax.set_title("Heading Correction")
+        
+        # BR: Motor RPM
+        ax = axes[1, 1]
+        ax.plot(t, df["left_avg"], color=C_PEACH, lw=1.5, label="Left Avg RPM")
+        ax.plot(t, df["right_avg"], color=C_BLUE, lw=1.5, label="Right Avg RPM")
+        ax.set_ylabel("RPM")
+        ax.set_xlabel("Time (s)")
+        ax.set_title("Motor Speed")
+        ax.legend(loc="upper left")
+
+    if meta:
+        fig.text(0.5, 0.02, meta, ha="center", fontsize=9, color=C_DIM)
+
+    plt.tight_layout(rect=[0, 0.04, 1, 0.96])
+    return fig
 
 # --- Plot: test_straight ------------------------------------------------------
 
@@ -439,11 +558,12 @@ def plot_minspeed(blk: TestBlock, idx: int) -> plt.Figure:
 
 # --- Dispatch table -----------------------------------------------------------
 _PLOT_FN = {
+    "telemetry_v1":     plot_telemetry_v1,
     "test_straight_v2": plot_straight,
-    "test_straight": plot_straight,
-    "test_turn":     plot_turn,
-    "test_minspeed": plot_minspeed,
-    "test_gyro_pd":  plot_straight,
+    "test_straight":    plot_straight,
+    "test_turn":        plot_turn,
+    "test_minspeed":    plot_minspeed,
+    "test_gyro_pd":     plot_straight,
 }
 
 

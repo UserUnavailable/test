@@ -576,16 +576,22 @@ void Wall_Stop(int spd,float timeout)
   Run(0);
 }
 // Run_gyro内部状态,供测试日志任务读取
-float test_log_menc = 0;          //编码器位置(左右均值)
-float test_log_move_err = 0;      //剩余距离
-float test_log_vm = 0;            //距离变化率
-float test_log_current_power = 0; //实际输出功率(减速后)
-float test_log_gyro_err = 0;      //航向误差
-float test_log_vg = 0;            //航向变化率
-float test_log_turnpower = 0;     //转向补偿输出
-float test_log_last_move_error = 0; //上一次距离误差
-float test_log_delta_move_err = 0;  //move_err - move_lasterror(未除dt的原始差值)
-float test_log_dt = 0;              //循环dt(秒)
+struct TelemetryData {
+    int action;          // 1=Turn, 2=Run直线, 3=测速测试
+    float target;
+    float current;
+    float error;
+    float error_deriv;
+    float dt;
+    float p_out;
+    float i_out;
+    float d_out;
+    float total_out;
+    float aux_error;
+    float aux_deriv;
+    float aux_out;
+};
+TelemetryData current_telemetry = {0};
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -655,16 +661,19 @@ void Run_gyro(double enc , double power, float g, bool ramp=true)
     double final_power = sgn(power) * current_power;
 
     // 写入全局变量供测试日志读取
-    test_log_menc = menc;
-    test_log_move_err = move_err;
-    test_log_vm = vm;
-    test_log_current_power = current_power;
-    test_log_gyro_err = gyro_err;
-    test_log_vg = vg;
-    test_log_turnpower = turnpower;
-    test_log_last_move_error = move_lasterror;
-    test_log_delta_move_err = vm; // Run_gyro中vm即move_err-move_lasterror(无dt归一化)
-    test_log_dt = 0; // Run_gyro无动态dt
+    current_telemetry.action = 2;
+    current_telemetry.target = enc;
+    current_telemetry.current = menc;
+    current_telemetry.error = move_err;
+    current_telemetry.error_deriv = vm;
+    current_telemetry.dt = 0;
+    current_telemetry.p_out = 0;
+    current_telemetry.i_out = 0;
+    current_telemetry.d_out = 0;
+    current_telemetry.total_out = final_power;
+    current_telemetry.aux_error = gyro_err;
+    current_telemetry.aux_deriv = vg;
+    current_telemetry.aux_out = turnpower;
 
     move_lasterror = move_err;
     //到达目标判断
@@ -758,16 +767,19 @@ void Run_gyro_new(double enc, float g=now)
     double final_power = movepower;
 
     // 写入全局变量供测试日志读取
-    test_log_menc = menc;
-    test_log_move_err = move_err;
-    test_log_vm = vm;
-    test_log_current_power = final_power;
-    test_log_gyro_err = gyro_err;
-    test_log_vg = vg;
-    test_log_turnpower = turnpower;
-    test_log_last_move_error = move_lasterror;
-    test_log_delta_move_err = move_err - move_lasterror;
-    test_log_dt = dt;
+    current_telemetry.action = 2;
+    current_telemetry.target = enc;
+    current_telemetry.current = menc;
+    current_telemetry.error = move_err;
+    current_telemetry.error_deriv = vm;
+    current_telemetry.dt = dt;
+    current_telemetry.p_out = move_kp * move_err;
+    current_telemetry.i_out = 0;
+    current_telemetry.d_out = move_kd * vm;
+    current_telemetry.total_out = final_power;
+    current_telemetry.aux_error = gyro_err;
+    current_telemetry.aux_deriv = vg;
+    current_telemetry.aux_out = turnpower;
     move_lasterror = move_err;
     //到达目标判断: 距离误差<2度 且 速度<100°/s (归一化后的vm单位是°/s)
     if (fabs(enc)-fabs(menc)<2 && fabs(vm) < 100)
@@ -1080,9 +1092,19 @@ void Turn_Gyro(float target)
    }
 
     // 写入全局变量供测试日志读取
-    test_log_gyro_err = error;
-    test_log_vg = V;
-    test_log_turnpower = pow;
+    current_telemetry.action = 1;
+    current_telemetry.target = target;
+    current_telemetry.current = Gyro.rotation(degrees);
+    current_telemetry.error = error;
+    current_telemetry.error_deriv = V;
+    current_telemetry.dt = 0;
+    current_telemetry.p_out = kp * error;
+    current_telemetry.i_out = 0;
+    current_telemetry.d_out = kd * V;
+    current_telemetry.total_out = pow;
+    current_telemetry.aux_error = 0;
+    current_telemetry.aux_deriv = 0;
+    current_telemetry.aux_out = 0;
 
     Turn(pow);
     
@@ -1102,6 +1124,115 @@ void Turn_Gyro(float target)
    RunStop(brake);
 
 }
+
+/**
+ * @brief 新版陀螺仪PID转向控制 (基于 JAR-Template 算法)
+ * @param target 目标角度
+ * 引入完整的PID控制，带抗积分饱和(start_i)、过零清空、稳定的Settle退出机制
+ * 解决转向过冲、最后几度卡死、高频抖动等问题
+ */
+void Turn_Gyro_new(float target)
+{
+   now = target;
+   target = Side * target + Start; //根据场地方向调整目标角度
+   
+   // ====== PID与退出条件参数 ======
+   float kp = 4.2;            // 比例系数 
+   float ki = 10.0;           // 积分系数 (继续加大，目前1.5还是不够快)
+   float kd = 0.25;           // 微分系数 (稍微加大阻尼，压制过冲)
+   float start_i = 15.0;      // 开始累加积分的误差阈值(度)
+   float max_voltage = 100;   // 最大输出功率
+   
+   float settle_error = 2.0;  // 稳定误差容忍度(度)
+   float settle_time = 150;   // 在容忍度内维持的时间(ms)才能退出
+   float timeout = 3000;      // 总体超时保护(ms)
+   // ===================================================
+   
+   float accumulated_error = 0;
+   float previous_error = reduce_negative_180_to_180(target - Gyro.rotation(degrees));
+   
+   float time_spent_settled = 0;
+   float time_spent_running = 0;
+   
+   // 引入真实的计时器来计算 dt，解决 D 项失效问题
+   float last_time = Brain.timer(timeUnits::msec);
+   
+   while (true)
+   {
+       float current_time = Brain.timer(timeUnits::msec);
+       float dt = (current_time - last_time) / 1000.0; // 转换为秒
+       if (dt <= 0.001) dt = 0.01; // 防止除零错误
+       last_time = current_time;
+
+       float error = reduce_negative_180_to_180(target - Gyro.rotation(degrees));
+       
+       // 1. 积分分离 (Integral windup prevention)
+       if (fabs(error) < start_i) {
+           accumulated_error += error * dt; // 积分项也应该乘以 dt
+       }
+       
+       // 2. 过零清空积分 (Zero-crossing integral reset)
+       if ((error > 0 && previous_error < 0) || (error < 0 && previous_error > 0)) {
+           accumulated_error = 0;
+       }
+       
+       // 3. 计算误差变化率 (导数)
+       float error_deriv = (error - previous_error) / dt;
+       
+       // 4. 计算PID输出
+       float p_out = kp * error;
+       float i_out = ki * accumulated_error;
+       float d_out = kd * error_deriv;
+       float output = p_out + i_out + d_out;
+       
+       previous_error = error;
+       
+       // 5. 功率限幅
+       if (fabs(output) > max_voltage) {
+           output = sgn(output) * max_voltage;
+       }
+       
+       // 写入全局变量供测试日志读取
+       current_telemetry.action = 1;
+       current_telemetry.target = target;
+       current_telemetry.current = Gyro.rotation(degrees);
+       current_telemetry.error = error;
+       current_telemetry.error_deriv = error_deriv;
+       current_telemetry.dt = dt;
+       current_telemetry.p_out = p_out;
+       current_telemetry.i_out = i_out;
+       current_telemetry.d_out = d_out;
+       current_telemetry.total_out = output;
+       current_telemetry.aux_error = 0;
+       current_telemetry.aux_deriv = 0;
+       current_telemetry.aux_out = 0;
+
+       // 6. 应用到底盘电机
+       Turn(output);
+       
+       // 7. 稳定退出逻辑 (Settle Logic)
+       if (fabs(error) < settle_error) {
+           time_spent_settled += dt * 1000.0; // 换算回毫秒
+       } else {
+           time_spent_settled = 0;
+       }
+       
+       time_spent_running += dt * 1000.0;
+       
+       // 8. 退出判断
+       if (time_spent_settled >= settle_time) {
+           break; 
+       }
+       if (time_spent_running >= timeout && timeout != 0) {
+           break; 
+       }
+       
+       wait(10, msec);
+   }
+   
+   RunStop(brake);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Anchor 航向锁定控制（基于陀螺仪）
 ///////////////////////////////////////////////////////////////////////////////
@@ -1919,28 +2050,12 @@ int AutoScreen()
 ///////////////////////////////////////////////////////////////////////////////////
 bool test_log_active = false; //日志任务运行标志
 
-// 测试类型枚举: 0=straight, 1=turn, 2=minspeed
-int test_log_type = 0;
-
-float test_minspeed_power = 0; //当前测试功率(0-100),供日志任务读取
-
 // 日志缓冲区结构与存储(先采集到内存,跑完后一次性输出)
 struct TestLogEntry {
     float time_s;
-    float menc;
-    float move_err;
-    float vm;
-    float current_power;
-    float gyro_err;
-    float vg;
-    float turnpower;
     float left_avg;
     float right_avg;
-    float last_move_error;  // 上一次距离误差
-    float delta_move_err;   // move_err - move_lasterror(原始差值)
-    float dt;               // 循环dt(秒)
-    float power;  // minspeed专用
-    float diff;   // minspeed专用
+    TelemetryData t; // 嵌套统一日志数据
 };
 
 const int TEST_LOG_MAX = 2000; // 最大日志条目数
@@ -1950,15 +2065,6 @@ int test_log_count = 0; // 当前已存条目数
 /**
  * @brief 统一测试日志任务 — 仅采集数据到缓冲区,不做串口输出
  * @return 0
- * 
- * test_log_type == 0 (test_straight):
- *   13列: {time_s, menc, move_err, last_move_error, delta_move_err, vm, dt, current_power, gyro_err, vg, turnpower, left_avg, right_avg}
- * 
- * test_log_type == 1 (test_turn):
- *   6列: {time_s, gyro_err, vg, turnpower, left_avg, right_avg}
- * 
- * test_log_type == 2 (test_minspeed):
- *   3列: {time_s, power, diff}
  */
 int test_log_task_fn()
 {
@@ -1980,36 +2086,20 @@ int test_log_task_fn()
     e.time_s = t;
     e.left_avg  = (l1 + l2 + l3) / 3.0;
     e.right_avg = (r1 + r2 + r3) / 3.0;
-
-    if(test_log_type == 0) // test_straight: 存储全部13列
-    {
-      e.menc            = test_log_menc;
-      e.move_err        = test_log_move_err;
-      e.last_move_error = test_log_last_move_error;
-      e.delta_move_err  = test_log_delta_move_err;
-      e.vm              = test_log_vm;
-      e.dt              = test_log_dt;
-      e.current_power   = test_log_current_power;
-      e.gyro_err        = test_log_gyro_err;
-      e.vg              = test_log_vg;
-      e.turnpower       = test_log_turnpower;
-    }
-    else if(test_log_type == 1) // test_turn: 存储转向相关列
-    {
-      e.gyro_err  = test_log_gyro_err;
-      e.vg        = test_log_vg;
-      e.turnpower = test_log_turnpower;
-    }
-    else if(test_log_type == 2) // test_minspeed: 存储功率-速度差
-    {
+    
+    // 如果是测速模式，自动计算 diff 并填入 telemetry
+    if (current_telemetry.action == 3) {
       float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
-      float theoretical_rpm = 200.0 * test_minspeed_power / 100.0;
-      e.power = test_minspeed_power;
-      e.diff  = avg_abs_rpm - theoretical_rpm;
+      float theoretical_rpm = 200.0 * current_telemetry.target / 100.0;
+      current_telemetry.current = avg_abs_rpm;
+      current_telemetry.error = avg_abs_rpm - theoretical_rpm;
     }
+
+    // 直接复制当前所有数据
+    e.t = current_telemetry;
 
     test_log_count++;
-    vex::task::sleep(test_log_type == 1 ? 20 : 100); // turn模式20ms, 其他100ms
+    vex::task::sleep(20); // 统一20ms高频采样
   }
   return 0;
 }
@@ -2022,41 +2112,27 @@ task test_log_task_handle;
 void test_log_dump()
 {
   // USB CDC 防丢策略: 60ms行间延迟 + 每8行300ms排空暂停
-  // V5 USB包=64B, 内部TX buffer≈512B, 无流控, printf溢出时静默丢弃
-  const int LINE_DELAY  = 60;   // 每行后等待(ms), 留够单USB包发送时间
-  const int CHUNK_SIZE  = 8;    // 每N行做一次长暂停
-  const int CHUNK_PAUSE = 300;  // 长暂停(ms), 让USB buffer彻底排空
+  const int LINE_DELAY  = 60;   
+  const int CHUNK_SIZE  = 8;    
+  const int CHUNK_PAUSE = 300;  
 
-  // 输出CSV表头
-  vex::task::sleep(100); // 确保前面的printf(如test类型标识)已发送完毕
-  if(test_log_type == 0)
-    printf("time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg\n");
-  else if(test_log_type == 1)
-    printf("time_s,gyro_err,vg,turnpower,left_avg,right_avg\n");
-  else if(test_log_type == 2)
-    printf("time_s,power,diff\n");
+  // 输出统一CSV表头
+  vex::task::sleep(100); 
+  printf("telemetry_v1\n");
+  vex::task::sleep(LINE_DELAY);
+  printf("time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out\n");
   vex::task::sleep(LINE_DELAY);
 
   // 逐行输出所有缓冲数据, 分块限速
   for(int i = 0; i < test_log_count; i++)
   {
     TestLogEntry &e = test_log_buf[i];
-    if(test_log_type == 0)
-    {
-      printf("%.3f,%.1f,%.1f,%.1f,%.2f,%.2f,%.4f,%.1f,%.2f,%.3f,%.1f,%.1f,%.1f\n",
-             e.time_s, e.menc, e.move_err, e.last_move_error, e.delta_move_err,
-             e.vm, e.dt, e.current_power, e.gyro_err, e.vg, e.turnpower,
-             e.left_avg, e.right_avg);
-    }
-    else if(test_log_type == 1)
-    {
-      printf("%.3f,%.2f,%.3f,%.1f,%.1f,%.1f\n",
-             e.time_s, e.gyro_err, e.vg, e.turnpower, e.left_avg, e.right_avg);
-    }
-    else if(test_log_type == 2)
-    {
-      printf("%.2f,%.0f,%.1f\n", e.time_s, e.power, e.diff);
-    }
+    
+    printf("%.3f,%.1f,%.1f,%d,%.2f,%.2f,%.2f,%.3f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.2f\n",
+            e.time_s, e.left_avg, e.right_avg,
+            e.t.action, e.t.target, e.t.current, e.t.error, e.t.error_deriv, e.t.dt,
+            e.t.p_out, e.t.i_out, e.t.d_out, e.t.total_out,
+            e.t.aux_error, e.t.aux_deriv, e.t.aux_out);
 
     // 分块限速: 每CHUNK_SIZE行做一次长暂停让USB buffer排空
     if((i + 1) % CHUNK_SIZE == 0)
@@ -2095,22 +2171,12 @@ void test_straight(double enc, float g=0)
   Start = Gyro.rotation(degrees);
 
   //清零全局日志变量
-  test_log_menc = 0;
-  test_log_move_err = 0;
-  test_log_vm = 0;
-  test_log_current_power = 0;
-  test_log_gyro_err = 0;
-  test_log_vg = 0;
-  test_log_turnpower = 0;
-  test_log_last_move_error = 0;
-  test_log_delta_move_err = 0;
-  test_log_dt = 0;
+  current_telemetry = {0};
 
   //打印测试类型标识
   printf("test_straight_v2\n"); //版本标记: v2=归一化dt版
 
   //启动日志任务@
-  test_log_type = 0; // straight模式
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
 
@@ -2150,25 +2216,18 @@ void test_turn()
     float target_angle = Gyro.rotation(degrees) + delta;
     
     //清零全局日志变量
-    test_log_menc = 0;
-    test_log_move_err = 0;
-    test_log_vm = 0;
-    test_log_current_power = 0;
-    test_log_gyro_err = 0;
-    test_log_vg = 0;
-    test_log_turnpower = 0;
+    current_telemetry = {0};
 
     //打印测试类型标识
     printf("test_turn (delta=%d deg)\n", delta);
 
     //启动日志任务
-    test_log_type = 1; // turn模式
     test_log_active = true;
     test_log_task_handle = task(test_log_task_fn);
     vex::task::sleep(50); // 等待日志任务启动并开始记录
     
     //执行PID转向
-    Turn_Gyro(target_angle);
+    Turn_Gyro_new(target_angle);
 
     //停止采集任务
     test_log_active = false;
@@ -2199,16 +2258,16 @@ void test_minspeed()
   printf("test_minspeed\n");
 
   //启动日志任务
-  test_log_type = 2; // minspeed模式
+  current_telemetry = {0};
+  current_telemetry.action = 3;
   test_log_active = true;
-  test_minspeed_power = 0;
   test_log_task_handle = task(test_log_task_fn);
 
   bool forward = true; //第一次往前走
 
   for(float power = 0; power <= 30; power += 2)
   {
-    test_minspeed_power = power; //更新当前功率,供日志任务读取
+    current_telemetry.target = power; //更新当前功率,供日志任务读取
 
     //驱动5秒
     if(forward)
@@ -2255,21 +2314,11 @@ void test_gyro_pd(float gyro_kp, float gyro_kd)
   RightRun_1.resetPosition();
 
   // 清零全局日志变量
-  test_log_menc = 0;
-  test_log_move_err = 0;
-  test_log_vm = 0;
-  test_log_current_power = 0;
-  test_log_gyro_err = 0;
-  test_log_vg = 0;
-  test_log_turnpower = 0;
-  test_log_last_move_error = 0;
-  test_log_delta_move_err = 0;
-  test_log_dt = 0;
+  current_telemetry = {0};
 
   printf("test_gyro_pd\n");   // 标识行
 
-  // 启动日志采集（复用 type=0 = test_straight_v2 格式）
-  test_log_type = 0;
+  // 启动日志采集
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
 
@@ -2296,16 +2345,19 @@ void test_gyro_pd(float gyro_kp, float gyro_kd)
     gyro_lasterror = gyro_err;
 
     // 写入全局变量供日志任务读取
-    test_log_menc          = menc;
-    test_log_move_err      = 0;
-    test_log_vm            = 0;
-    test_log_current_power = base_power;
-    test_log_gyro_err      = gyro_err;
-    test_log_vg            = vg;
-    test_log_turnpower     = turnpower;
-    test_log_last_move_error = 0;
-    test_log_delta_move_err  = 0;
-    test_log_dt            = dt;
+    current_telemetry.action = 2; // 用 action 2 表示带有 gyro_err 的直线运动日志格式
+    current_telemetry.target = 0;
+    current_telemetry.current = menc;
+    current_telemetry.error = 0;
+    current_telemetry.error_deriv = 0;
+    current_telemetry.dt = dt;
+    current_telemetry.p_out = 0;
+    current_telemetry.i_out = 0;
+    current_telemetry.d_out = 0;
+    current_telemetry.total_out = base_power;
+    current_telemetry.aux_error = gyro_err;
+    current_telemetry.aux_deriv = vg;
+    current_telemetry.aux_out = turnpower;
 
     // 恒压驱动 + gyro 转向补偿
     Run_Ctrl(base_power + turnpower, base_power - turnpower);

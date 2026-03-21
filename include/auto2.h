@@ -23,6 +23,7 @@ Run_gyro_new(-200);
 Up.set(true);
 Get_Ball(1);
 wait(1200);
+Load.set(false);
 Get_Ball(0);
 Run_gyro_new(470, -120);
 Turn_Gyro(-180);
