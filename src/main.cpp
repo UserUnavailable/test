@@ -121,10 +121,10 @@ void pre_auton(void) {
 
   // ===== 调试强制设置 =====
   // 设置 FORCE_AUTO ；=0 恢复屏幕选择
-  #define FORCE_AUTO 0
+  #define FORCE_AUTO 1
   
   #if FORCE_AUTO
-    Auto = 4;        // 自动程序 1
+    Auto = 6;        // 自动程序 1
     Alliance = 1;   // -1=蓝方, 1=红方
     Side = 1;
     button = 0;
@@ -156,7 +156,8 @@ void autonomous(void) {
   ColorThread=thread(Color_Control);
   Anchor.set(false);
 // ..........................................................................
-  //AutoPro();
+  //run_gyro_JAR(1000, 0); 
+  AutoPro();
   //Side=1;
   //Hook();
 
@@ -171,9 +172,9 @@ void autonomous(void) {
   */
   
   //Hook();//AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
-  //test_gyro_pd(8.0, 0.8);  // 恒速100RPM gyro PD调参: kp=2.0, kd=0.2
-  // test_straight();
-  test_turn();
+  //test_gyro(50); 
+  //test_straight(1000);
+  //test_turn();
   //Run_wall(-50,2000,3);
   //test_minspeed();
 

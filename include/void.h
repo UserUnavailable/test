@@ -484,7 +484,7 @@ void Get_Ball(float spd)//0：停；1：中高桥；-1：低桥；2：吸球.   
   if (spd==-1) //低桥模式:吸球反转
   {
     auto_color_ctrl=0;
-    Intake(-100); 
+    Intake(-65); 
     Ball(-100);
     Shoot(-100);
   }  
@@ -602,7 +602,7 @@ TelemetryData current_telemetry = {0};
  * @param ramp 是否启用比例减速(默认为true)
  * 使用陀螺仪实时纠偏,保证直线行驶精度
  */
-void Run_gyro(double enc , double power, float g, bool ramp=true)
+void Run_gyro(double enc , double power, float g = now, bool ramp=true)
 {
   //enc=enc*3;
   g=Side*g+Start; //根据场地方向调整目标角度
@@ -795,6 +795,133 @@ void Run_gyro_new(double enc, float g=now)
   }
   RunStop(brake);
 }
+
+/**
+ * @brief 融合 JAR-Template 思想的精简版直线行驶函数
+ * 采用固定参数双 PID + 时间窗防抖跳出 (Settle Time)
+ * 完美兼容现有的 test_straight 与 Telemetry 日志系统
+ */
+void run_gyro_JAR(double enc, float g=now)
+{
+  g = Side * g + Start;
+  LeftRun_1.resetPosition();
+  LeftRun_2.resetPosition();
+  LeftRun_3.resetPosition();
+  RightRun_1.resetPosition();
+  RightRun_2.resetPosition();
+  RightRun_3.resetPosition();
+
+  float drive_kp = 0.38;
+  float drive_ki = 0.005;
+  float drive_kd = 0.04;
+  float drive_starti = 150.0;
+  float drive_max_power = 84.0;
+  float drive_settle_error = 2.0;
+  float drive_settle_time = 200.0;
+  float drive_timeout = (fabs(enc) / 200.0 + 1.5) * 1000.0;
+
+  float heading_kp = 0.0;
+  float heading_ki = 0.0;
+  float heading_kd = 0.0;
+  float heading_starti = 0.0;
+  float heading_max_power = 50.0;
+
+  float menc = 0.0;
+  float drive_error = fabs(enc);
+  float drive_last_error = drive_error;
+  float drive_integral = 0.0;
+
+  float heading_error = reduce_negative_180_to_180(g - Gyro.rotation(degrees));
+  float heading_last_error = heading_error;
+  float heading_integral = 0.0;
+
+  float time_settled = 0.0;
+  float time_running = 0.0;
+
+  float last_time = Brain.timer(timeUnits::sec);
+  while (1)
+  {
+    float current_time = Brain.timer(timeUnits::sec);
+    float dt = current_time - last_time;
+    if (dt < 0.002) {
+      vex::task::sleep(1);
+      continue;
+    }
+    last_time = current_time;
+    float dt_ms = dt * 1000.0;
+    time_running += dt_ms;
+
+    menc = (fabs(LeftRun_1.position(rotationUnits::deg)) + fabs(LeftRun_2.position(rotationUnits::deg)) + fabs(LeftRun_3.position(rotationUnits::deg))
+         + fabs(RightRun_1.position(rotationUnits::deg)) + fabs(RightRun_2.position(rotationUnits::deg)) + fabs(RightRun_3.position(rotationUnits::deg))) / 6.0;
+
+    drive_error = fabs(enc) - fabs(menc);
+    if (fabs(drive_error) < drive_starti) {
+      drive_integral += drive_error;
+    }
+    if ((drive_error > 0 && drive_last_error < 0) || (drive_error < 0 && drive_last_error > 0)) {
+      drive_integral = 0;
+    }
+    float drive_derivative = drive_error - drive_last_error;
+    drive_last_error = drive_error;
+
+    heading_error = reduce_negative_180_to_180(g - Gyro.rotation(degrees));
+    if (fabs(heading_error) < heading_starti) {
+      heading_integral += heading_error;
+    }
+    if ((heading_error > 0 && heading_last_error < 0) || (heading_error < 0 && heading_last_error > 0)) {
+      heading_integral = 0;
+    }
+    float heading_derivative = heading_error - heading_last_error;
+    heading_last_error = heading_error;
+    float drive_output = drive_kp * drive_error + drive_ki * drive_integral + drive_kd * drive_derivative;
+    float heading_output = heading_kp * heading_error + heading_ki * heading_integral + heading_kd * heading_derivative;
+
+    if (drive_output > drive_max_power) drive_output = drive_max_power;
+    if (drive_output < -drive_max_power) drive_output = -drive_max_power;
+    if (heading_output > heading_max_power) heading_output = heading_max_power;
+    if (heading_output < -heading_max_power) heading_output = -heading_max_power;
+
+    if (fabs(drive_error) > drive_settle_error) {
+      if (drive_output > 0 && drive_output < motor_min_speed) drive_output = motor_min_speed;
+      if (drive_output < 0 && drive_output > -motor_min_speed) drive_output = -motor_min_speed;
+    }
+
+    current_telemetry.action = 2;
+    current_telemetry.target = enc;
+    current_telemetry.current = menc;
+    current_telemetry.error = drive_error;
+    current_telemetry.error_deriv = drive_derivative;
+    current_telemetry.dt = dt;
+    current_telemetry.p_out = drive_kp * drive_error;
+    current_telemetry.i_out = drive_ki * drive_integral;
+    current_telemetry.d_out = drive_kd * drive_derivative;
+    current_telemetry.total_out = drive_output;
+    current_telemetry.aux_error = heading_error;
+    current_telemetry.aux_deriv = heading_derivative;
+    current_telemetry.aux_out = heading_output;
+
+    if (fabs(drive_error) < drive_settle_error) {
+      time_settled += dt_ms;
+    } else {
+      time_settled = 0;
+    }
+    if (time_settled > drive_settle_time || (drive_timeout != 0 && time_running > drive_timeout)) {
+      break;
+    }
+
+    float left_power = (sgn(enc) * drive_output) + heading_output;
+    float right_power = (sgn(enc) * drive_output) - heading_output;
+    if (left_power > 100) left_power = 100;
+    if (left_power < -100) left_power = -100;
+    if (right_power > 100) right_power = 100;
+    if (right_power < -100) right_power = -100;
+    Run_Ctrl((int)left_power, (int)right_power);
+
+    vex::task::sleep(10);
+  }
+  RunStop(brake);
+}
+
 /**
  * @brief 双距离传感器辅助直线行驶(陀螺仪+测距仪双重纠偏)
  * @param dis 目标距离(毫米), 当检测距离满足条件时停止
@@ -2181,7 +2308,7 @@ void test_straight(double enc, float g=0)
   test_log_task_handle = task(test_log_task_fn);
 
   //执行直线行驶(传入目标角度g, 实现弧线行驶)
-  Run_gyro_new(enc, g);
+  run_gyro_JAR(enc, g);
 
   //Run_gyro结束后继续记录1秒,观察完整减速过程
   //vex::task::sleep(1000);
@@ -2304,7 +2431,7 @@ void test_minspeed()
  * gyro PD算法与Run_gyro_new一致(含dt归一化),
  * 日志复用 test_log_type=0 (test_straight_v2 格式)
  */
-void test_gyro_pd(float gyro_kp, float gyro_kd)
+void test_gyro(float gyro_kp, float gyro_kd)
 {
   now = 0;
   Start = Gyro.rotation(degrees);

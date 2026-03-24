@@ -166,29 +166,12 @@ void E_D()//从中桥到填装区到长桥
   Load.set(false);
   wait(200);
 }
-void Hook()
+void hook()
 {
-  now = 0;
-  Side = 1;
-  Start=Gyro.rotation(degrees)-now*Side;
-  Run_gyro_new(250, -45);
+  Run_gyro_new(250, -221);
   Wing_L.set(false);
-  Turn_Gyro(0);
-  Run_gyro(-520, 100, 0);
-  Turn_Gyro(30);
-  /*
-  Run_gyro_new(70);
-  Run_gyro_new(230, -70);
-  Wing_L.set(false);
-  Turn_Gyro(-10);
-  Run_gyro_new(-580, 3);
-  
-  Run_gyro_new(-50, 30);
-  */
-  
-  
-  
-  
-  
+  Turn_Gyro_new(182);
+  Run_gyro(-520, 100, -178);
+  Turn_Gyro_new(-133);
 }
 /////////////////////////////////////////////////////////////////

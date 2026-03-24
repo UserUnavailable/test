@@ -8,7 +8,7 @@ wait(100);
 Load.set(true);
 wait(150);
 Run_gyro_new(640, -130);       
-Turn_Gyro(-180); 
+Turn_Gyro_new(-180); 
 wait(20,msec);
 Run_wall(30,1300,10);
 Run_gyro_new(-520, -180);
@@ -19,8 +19,8 @@ wait(400);
 Get_Ball(0);
 Run_gyro_new(250, -221);
 Wing_L.set(false);
-Turn_Gyro(-180);
-Run_gyro(-520, 100, -180);
-Turn_Gyro(-133);
+Turn_Gyro_new(-178);
+Run_gyro(-520, 100, -178);
+Turn_Gyro_new(-133);
 
 
