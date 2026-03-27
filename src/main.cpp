@@ -150,13 +150,12 @@ void pre_auton(void) {
 
 void autonomous(void) {
   //Up.set(true);
-  Basket.set(true);
+  //Basket.set(true);
   auto_control=1;
   driver_control=0;
   ColorThread=thread(Color_Control);
   Anchor.set(false);
 // ..........................................................................
-  //run_gyro_JAR(1000, 0); 
   //AutoPro();
   //Side=1;
   //Hook();
@@ -173,7 +172,8 @@ void autonomous(void) {
   
   //Hook();//AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
   //test_gyro(50); 
-  test_straight(500);
+  //Vision_Center_Track(15);
+  test_straight(800,0,true);
   //test_turn();
   //Run_wall(-50,2000,3);
   //test_minspeed();

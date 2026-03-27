@@ -592,6 +592,7 @@ struct TelemetryData {
     float aux_error;
     float aux_deriv;
     float aux_out;
+    float gyro_pitch;
 };
 TelemetryData current_telemetry = {0};
 ///////////////////////////////////////////////////////////////////////////////
@@ -691,7 +692,6 @@ void Run_gyro(double enc , double power, float g = now, bool ramp=true)
   }
   RunStop(brake);
 }
-
 /**
  * @brief 陀螺仪辅助直线行驶(P控制)
  * @param enc 目标编码器角度幅值(度), 函数会自动执行前进+后退
@@ -799,150 +799,203 @@ void Run_gyro_new(double enc, float g=now)
 }
 
 /**
- * @brief 融合 JAR-Template 思想的精简版直线行驶函数
- * 采用固定参数双 PID + 时间窗防抖跳出 (Settle Time)
- * 完美兼容现有的 test_straight 与 Telemetry 日志系统
+ * @brief JAR-Template 轻量化 PID 控制器结构体
+ * 包含积分抗饱和(starti)、过零清零积分、稳定判定(Settle Logic)
  */
-void run_gyro_JAR(double enc, float g=now)
-{
-  g = Side * g + Start;
-  LeftRun_1.resetPosition();
-  LeftRun_2.resetPosition();
-  LeftRun_3.resetPosition();
-  RightRun_1.resetPosition();
-  RightRun_2.resetPosition();
-  RightRun_3.resetPosition();
+struct JAR_PID {
+    float error = 0;
+    float kp, ki, kd, starti;
+    float settle_error, settle_time, timeout;
+    float accumulated_error = 0;
+    float previous_error = 0;
+    float current_deriv = 0; // 新增：记录当前的误差导数
+    float time_spent_settled = 0;
+    float time_spent_running = 0;
+    float output = 0;
 
-  float drive_kp = 0.38; // 稍微提升基础推力，加快起步
-  float drive_ki = 0.002;
-  float drive_kd = 0.07; // 增加阻尼，压制提速后可能带来的过冲
-  float drive_starti = 90.0;
-  float drive_max_power = (enc > 0) ? 82.0 : 76.0; // 显著提速：前进从 68 提至 82，后退从 62 提至 76
-  float drive_settle_error = 6.0; // 放宽到达判定
-  float drive_settle_time = 60.0; // 加快到达后退出速度
-  float drive_timeout = (fabs(enc) / 200.0 + 1.5) * 1000.0;
-  float reverse_brake_cap = 18.0;
+    JAR_PID(float error, float kp, float ki, float kd, float starti, 
+            float settle_error, float settle_time, float timeout) :
+        error(error), kp(kp), ki(ki), kd(kd), starti(starti), 
+        settle_error(settle_error), settle_time(settle_time), timeout(timeout) {}
 
-  float heading_kp = 1.0;
-  float heading_ki = 0.0;
-  float heading_kd = 0.3;
-  float heading_starti = 0.0;
-  float heading_max_power = 50.0;
+    float compute(float current_error) {
+        error = current_error;
+        
+        // 第一次循环时，防止产生巨大的误差导数尖峰
+        if (time_spent_running == 0) {
+            previous_error = error;
+            current_deriv = 0;
+        } else {
+            current_deriv = error - previous_error; // 必须在 previous_error 更新前计算
+        }
 
-  float menc = 0.0;
-  float drive_error = fabs(enc);
-  float drive_last_error = drive_error;
-  float drive_integral = 0.0;
+        // 积分起效窗口
+        if (fabs(error) < starti) {
+            accumulated_error += error;
+        }
+        // 过零清空积分
+        if ((error > 0 && previous_error < 0) || (error < 0 && previous_error > 0)) {
+            accumulated_error = 0;
+        }
 
-  float heading_error = reduce_negative_180_to_180(g - Gyro.rotation(degrees));
-  float heading_last_error = heading_error;
-  float heading_integral = 0.0;
+        output = kp * error + ki * accumulated_error + kd * current_deriv;
+        previous_error = error;
 
-  float time_settled = 0.0;
-  float time_running = 0.0;
-  float time_stalled = 0.0;
+        // 稳定时间判定 (原生 JAR 逻辑)
+        if (fabs(error) < settle_error) {
+            time_spent_settled += 10;
+        } else {
+            time_spent_settled = 0;
+        }
 
-  float last_time = Brain.timer(timeUnits::sec);
-  while (1)
-  {
-    float current_time = Brain.timer(timeUnits::sec);
-    float dt = current_time - last_time;
-    if (dt < 0.002) {
-      vex::task::sleep(1);
-      continue;
-    }
-    last_time = current_time;
-    float dt_ms = dt * 1000.0;
-    time_running += dt_ms;
-
-    menc = (fabs(LeftRun_1.position(rotationUnits::deg)) + fabs(LeftRun_2.position(rotationUnits::deg)) + fabs(LeftRun_3.position(rotationUnits::deg))
-         + fabs(RightRun_1.position(rotationUnits::deg)) + fabs(RightRun_2.position(rotationUnits::deg)) + fabs(RightRun_3.position(rotationUnits::deg))) / 6.0;
-
-    float avg_rpm = (fabs(LeftRun_1.velocity(rpm)) + fabs(LeftRun_2.velocity(rpm)) + fabs(LeftRun_3.velocity(rpm))
-                  + fabs(RightRun_1.velocity(rpm)) + fabs(RightRun_2.velocity(rpm)) + fabs(RightRun_3.velocity(rpm))) / 6.0;
-
-    drive_error = fabs(enc) - fabs(menc);
-    if (fabs(drive_error) < drive_starti && fabs(drive_error) > drive_settle_error && avg_rpm > 3.0) {
-      drive_integral += drive_error;
-    }
-    if ((drive_error > 0 && drive_last_error < 0) || (drive_error < 0 && drive_last_error > 0)) {
-      drive_integral = 0;
-    }
-    float drive_derivative = drive_error - drive_last_error;
-    drive_last_error = drive_error;
-
-    heading_error = reduce_negative_180_to_180(g - Gyro.rotation(degrees));
-    if (fabs(heading_error) < heading_starti) {
-      heading_integral += heading_error;
-    }
-    if ((heading_error > 0 && heading_last_error < 0) || (heading_error < 0 && heading_last_error > 0)) {
-      heading_integral = 0;
-    }
-    float heading_derivative = heading_error - heading_last_error;
-    heading_last_error = heading_error;
-    float drive_output = drive_kp * drive_error + drive_ki * drive_integral + drive_kd * drive_derivative;
-    float heading_output = heading_kp * heading_error + heading_ki * heading_integral + heading_kd * heading_derivative;
-
-    if (drive_output > drive_max_power) drive_output = drive_max_power;
-    if (drive_output < -drive_max_power) drive_output = -drive_max_power;
-    if (heading_output > heading_max_power) heading_output = heading_max_power;
-    if (heading_output < -heading_max_power) heading_output = -heading_max_power;
-
-    if (fabs(drive_error) < 80.0) drive_output *= 0.75;
-    if (fabs(drive_error) < 40.0) drive_output *= 0.55;
-
-    float drive_cmd = sgn(enc) * drive_output;
-
-    if (sgn(enc) * drive_cmd < 0 && fabs(drive_cmd) > reverse_brake_cap) {
-      drive_cmd = -sgn(enc) * reverse_brake_cap;
+        time_spent_running += 10;
+        return output;
     }
 
-    if (fabs(drive_error) > 60.0 && sgn(enc) * drive_cmd > 0 && fabs(drive_cmd) < motor_min_speed) {
-      drive_cmd = sgn(drive_cmd) * motor_min_speed;
+    bool is_settled() {
+        if (time_spent_running > timeout && timeout != 0) return true;
+        if (time_spent_settled > settle_time) return true;
+        
+        // 融合你的老代码逻辑：如果误差极小，并且速度接近于0，立刻退出！
+        // 因为 dt = 10ms，所以速度差值如果 < 0.3 (即30度/秒)，就说明车子已经物理停转了。
+        if (fabs(error) < settle_error * 1.5 && fabs(current_deriv) < 0.3) {
+            return true;
+        }
+        
+        return false;
     }
+};
 
-    current_telemetry.action = 2;
-    current_telemetry.target = enc;
-    current_telemetry.current = menc;
-    current_telemetry.error = drive_error;
-    current_telemetry.error_deriv = drive_derivative;
-    current_telemetry.dt = dt;
-    current_telemetry.p_out = drive_kp * drive_error;
-    current_telemetry.i_out = drive_ki * drive_integral;
-    current_telemetry.d_out = drive_kd * drive_derivative;
-    current_telemetry.total_out = drive_cmd;
-    current_telemetry.aux_error = heading_error;
-    current_telemetry.aux_deriv = heading_derivative;
-    current_telemetry.aux_out = heading_output;
+/**
+ * @brief 移植自 JAR-Template 的直线行驶算法 (分离前后两套PID)
+ * @param target_enc 目标距离 (编码器度数)，正数前进，负数后退
+ * @param target_heading 目标航向
+ * @param max_voltage 最大输出功率 (0-100)
+ */
+void run_gyro_JAR(double target_enc, float target_heading = now, float max_voltage = 127) {
+    target_heading = Side * target_heading + Start; // 适应场地
 
-    if (fabs(drive_error) <= drive_settle_error) {
-      time_settled += dt_ms;
+    LeftRun_1.resetPosition();
+    LeftRun_2.resetPosition();
+    LeftRun_3.resetPosition();
+    RightRun_1.resetPosition();
+    RightRun_2.resetPosition();
+    RightRun_3.resetPosition();
+
+    float drive_timeout = fabs(target_enc) / 200.0 * 500 + 1000; // 缩短超时时间，避免死等
+    
+    // ================== 前后两套PID参数分离 ==================
+    // 激进调参阶段：悬崖刹车法 (高P高D) + 防翘头
+    float drive_kp, drive_ki, drive_kd, drive_starti, drive_settle_error, drive_settle_time;
+        if (target_enc > 0) {
+        // 前进：防翘尾处理 + 解决过冲
+        // 降低 P 让减速区大幅拉长 (127/0.18 ≈ 700度开始减速)，极其平缓地卸去动力，防止重心前移翘尾。
+        // 上一次 ki=0.02 导致了严重的积分爆炸（最后倒车冲到了 825度）。
+        // 现在大幅削减 ki 并使用极其微弱的起效窗口，仅用于破除最后的 2-3 度死区。
+        drive_kp = 0.18;  
+        drive_ki = 0.002; // 极其微小的积分
+        drive_kd = 1.2;   
+        drive_starti = 50; // 只在最后 50 度才允许积分介入
+        drive_settle_error = 3.5;
+        drive_settle_time = 100;
     } else {
-      time_settled = 0;
+        // 后退：解决中段翘头与末段死区问题
+        // 将 P 调回 0.16，恢复之前的起步速度。
+        // 为了防止中段翘头（即退出 127 满功率限幅时的顿挫），我们加入“最大加速度限制（Slew Rate）”或直接调小 max_voltage 
+        // 使得加速和减速更加平滑。这里通过保持 D 项在 1.0 的安全范围内，并依靠 0.16 的 P 项，在速度和稳定性之间取得平衡。
+        drive_kp = 0.16;  
+        drive_ki = 0.002; 
+        drive_kd = 1.0;   
+        drive_starti = 50; 
+        drive_settle_error = 3.5;
+        drive_settle_time = 100;
     }
 
-    if (fabs(drive_error) > drive_settle_error && fabs(drive_error) < 25.0 && avg_rpm < 5.0 && fabs(drive_derivative) < 0.4 && fabs(drive_cmd) < 12.0) {
-      time_stalled += dt_ms;
-    } else {
-      time_stalled = 0;
+    // 初始化驱动 PID (传入对应方向的参数)
+    JAR_PID drivePID(target_enc, drive_kp, drive_ki, drive_kd, drive_starti, drive_settle_error, drive_settle_time, drive_timeout); 
+    
+    // 航向PID (注意: JAR的heading_max_voltage通常设为相对较小的值)
+    float heading_error = target_heading - Gyro.rotation(degrees);
+    JAR_PID headingPID(heading_error, 3.0, 0.0, 15.0, 0, 1.0, 100, 0);
+
+    float heading_max_voltage = 40;
+    float prev_drive_output = 0.0; // 用于限制起步加速度
+
+    while (!drivePID.is_settled()) {
+        float average_position = (LeftRun_1.position(deg) + LeftRun_2.position(deg) + LeftRun_3.position(deg) +
+                                  RightRun_1.position(deg) + RightRun_2.position(deg) + RightRun_3.position(deg)) / 6.0;
+        
+        float drive_err = target_enc - average_position;
+        float head_err = target_heading - Gyro.rotation(degrees);
+
+        float drive_output = drivePID.compute(drive_err);
+        float heading_output = headingPID.compute(head_err);
+
+        // --- 新增：起步加速度限制 (Slew Rate Control) ---
+        // 仅限制加速过程，不限制减速，防止起步瞬间爆发导致翘头
+        float max_step = 10; // 每 10ms 最大电压增加量 (约 0.15 秒内平滑过渡到满速 127)
+        if (fabs(drive_output) > fabs(prev_drive_output)) {
+            if (drive_output > 0 && drive_output > prev_drive_output + max_step) {
+                drive_output = prev_drive_output + max_step;
+            } else if (drive_output < 0 && drive_output < prev_drive_output - max_step) {
+                drive_output = prev_drive_output - max_step;
+            }
+        }
+        prev_drive_output = drive_output;
+
+        // --- 新增：最小起步功率 (死区补偿) ---
+        // 彻底解决末段死区问题：当输出太小推不动底盘，且还没到达目标时，强制给一个最小功率，瞬间破除静摩擦。
+        // 上次测试中 8.2 的输出仍然无法克服静摩擦导致超时，因此将最小功率提升至 12.0 (约 1V)。
+        float min_power = 12.0; // 最小起步功率，确保能克服静摩擦
+        if (fabs(drive_err) > 2.0) { // 如果误差大于 2 度，说明还没到
+            if (drive_output > 0 && drive_output < min_power) {
+                drive_output = min_power;
+            } else if (drive_output < 0 && drive_output > -min_power) {
+                drive_output = -min_power;
+            }
+        }
+        // -------------------------------------
+
+        // 提取已计算的导数用于日志
+        float current_drive_deriv = drivePID.current_deriv;
+        float current_head_deriv = headingPID.current_deriv;
+
+        // 驱动限幅
+        if (fabs(drive_output) > max_voltage) {
+            drive_output = sgn(drive_output) * max_voltage;
+        }
+        // 航向限幅
+        if (fabs(heading_output) > heading_max_voltage) {
+            heading_output = sgn(heading_output) * heading_max_voltage;
+        }
+
+        // 结合输出 (左轮 = 驱动 + 转向, 右轮 = 驱动 - 转向)
+        // 恢复航向纠偏
+        float left_out = drive_output + heading_output;
+        float right_out = drive_output - heading_output;;
+
+        // 记录遥测日志
+        current_telemetry.action = 3; // 标记为 3 (JAR直线)
+        current_telemetry.target = target_enc;
+        current_telemetry.current = average_position;
+        current_telemetry.error = drive_err;
+        current_telemetry.error_deriv = current_drive_deriv; 
+        current_telemetry.dt = 0.01;
+        current_telemetry.p_out = drivePID.kp * drive_err;
+        current_telemetry.i_out = drivePID.ki * drivePID.accumulated_error;
+        current_telemetry.d_out = drivePID.kd * current_drive_deriv;
+        current_telemetry.total_out = drive_output;
+        current_telemetry.aux_error = head_err;
+        current_telemetry.aux_deriv = current_head_deriv;
+        current_telemetry.aux_out = heading_output;
+        current_telemetry.gyro_pitch = Gyro.pitch(degrees);
+
+        Run_Ctrl(left_out, right_out);
+        vex::task::sleep(10); 
     }
-
-    if (time_settled > drive_settle_time || time_stalled > 150.0 || (drive_timeout != 0 && time_running > drive_timeout)) {
-      break;
-    }
-
-    float left_power = drive_cmd + heading_output;
-    float right_power = drive_cmd - heading_output;
-    if (left_power > 100) left_power = 100;
-    if (left_power < -100) left_power = -100;
-    if (right_power > 100) right_power = 100;
-    if (right_power < -100) right_power = -100;
-    Run_Ctrl((int)left_power, (int)right_power);
-
-    vex::task::sleep(10);
-  }
-  RunStop(coast);
+    RunStop(brake);
 }
+
 
 /**
  * @brief 双距离传感器辅助直线行驶(陀螺仪+测距仪双重纠偏)
@@ -2236,8 +2289,8 @@ int test_log_task_fn()
     e.left_avg  = (l1 + l2 + l3) / 3.0;
     e.right_avg = (r1 + r2 + r3) / 3.0;
     
-    // 如果是测速模式，自动计算 diff 并填入 telemetry
-    if (current_telemetry.action == 3) {
+    // 如果是纯测速模式(action==99)，才覆盖(原本是3,和JAR直线冲突了)
+    if (current_telemetry.action == 99) {
       float avg_abs_rpm = (l1 + l2 + l3 + r1 + r2 + r3) / 6.0;
       float theoretical_rpm = 200.0 * current_telemetry.target / 100.0;
       current_telemetry.current = avg_abs_rpm;
@@ -2269,7 +2322,7 @@ void test_log_dump()
   vex::task::sleep(100); 
   printf("telemetry_v1\n");
   vex::task::sleep(LINE_DELAY);
-  printf("time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out\n");
+  printf("time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out,gyro_pitch\n");
   vex::task::sleep(LINE_DELAY);
 
   // 逐行输出所有缓冲数据, 分块限速
@@ -2277,11 +2330,11 @@ void test_log_dump()
   {
     TestLogEntry &e = test_log_buf[i];
     
-    printf("%.3f,%.1f,%.1f,%d,%.2f,%.2f,%.2f,%.3f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.2f\n",
+    printf("%.3f,%.1f,%.1f,%d,%.2f,%.2f,%.2f,%.3f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.2f,%.2f\n",
             e.time_s, e.left_avg, e.right_avg,
             e.t.action, e.t.target, e.t.current, e.t.error, e.t.error_deriv, e.t.dt,
             e.t.p_out, e.t.i_out, e.t.d_out, e.t.total_out,
-            e.t.aux_error, e.t.aux_deriv, e.t.aux_out);
+            e.t.aux_error, e.t.aux_deriv, e.t.aux_out, e.t.gyro_pitch);
 
     // 分块限速: 每CHUNK_SIZE行做一次长暂停让USB buffer排空
     if((i + 1) % CHUNK_SIZE == 0)
@@ -2309,21 +2362,26 @@ void test_log_dump()
  * @brief 直线行驶测试函数(含统一10列日志)
  * @param enc 目标编码器值(度), 正值前进, 负值后退
  * @param g 目标角度(默认0, 即保持当前朝向)
+ * @param use_jar 是否使用 JAR 算法 (true=run_gyro_JAR, false=Run_gyro_new)
  * 
- * 调用 run_gyro_JAR 执行前进一段再后退同距离,同时在后台输出:
- *   time_s, menc, move_err, last_move_error, delta_move_err, vm, dt, current_power, gyro_err, vg, turnpower, left_avg, right_avg
+ * 调用 Run_gyro_new 或 run_gyro_JAR 执行前进一段再后退同距离,同时在后台输出日志
  */
-void test_straight(double enc, float g=0)
+void test_straight(double enc, float g=0, bool use_jar = true)
 {
   double dist = fabs(enc);
   now = 0;
   Start = Gyro.rotation(degrees);
 
   current_telemetry = {0};
-  printf("test_straight_v2_forward\n");
+  if(use_jar) printf("test_straight_JAR_forward\n");
+  else printf("test_straight_v2_forward\n");
+  
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
-  run_gyro_JAR(dist, g);
+  
+  if(use_jar) run_gyro_JAR(enc, g);
+  else Run_gyro_new(dist, g);
+  
   test_log_active = false;
   vex::task::sleep(100);
   test_log_dump();
@@ -2331,10 +2389,15 @@ void test_straight(double enc, float g=0)
   vex::task::sleep(500);
 
   current_telemetry = {0};
-  printf("test_straight_v2_backward\n");
+  if(use_jar) printf("test_straight_JAR_backward\n");
+  else printf("test_straight_v2_backward\n");
+  
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
-  run_gyro_JAR(-dist, g);
+  
+  if(use_jar) run_gyro_JAR(-enc, g);
+  else Run_gyro_new(-dist, g);
+  
   test_log_active = false;
   vex::task::sleep(100);
   test_log_dump();

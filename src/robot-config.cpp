@@ -32,8 +32,8 @@ digital_out Basket = digital_out(Brain.ThreeWirePort.C);
 digital_out Anchor = digital_out(Brain.ThreeWirePort.E);
 distance Distance1 = distance(PORT5); //距离传感器，端口待定
 distance Distance2 = distance(PORT4);
-aivision::colordesc Vision__HighGoal(1, 255, 255, 0, 10, 0.20);
-aivision Vision(PORT20, Vision__HighGoal);
+aivision::colordesc Vision__HighGoal(1, 255, 40, 40, 35, 0.05);
+aivision Vision(PORT7, Vision__HighGoal);
 // VEXcode generated functions
 // define variable for remote controller enable/disable
 bool RemoteControlCodeEnabled = true;

@@ -94,7 +94,7 @@ C_DIM    = "#585b70"
 # --- Data structures ----------------------------------------------------------
 
 TEST_HEADERS: dict[str, str] = {
-    "telemetry_v1": "time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out",
+    "telemetry_v1": "time_s,left_avg,right_avg,action,target,current,error,error_deriv,dt,p_out,i_out,d_out,total_out,aux_error,aux_deriv,aux_out,gyro_pitch",
     "test_straight_v2": "time_s,menc,move_err,last_move_error,delta_move_err,vm,dt,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_straight": "time_s,menc,move_err,vm,current_power,gyro_err,vg,turnpower,left_avg,right_avg",
     "test_turn":     "time_s,gyro_err,vg,turnpower,left_avg,right_avg",
@@ -291,16 +291,24 @@ def plot_telemetry_v1(blk: TestBlock, idx: int) -> plt.Figure:
         ax.set_title("Angular Velocity")
         ax.legend(loc="upper right")
 
-        # BR: Motor RPM
+        # BR: Motor RPM & Pitch
         ax = axes[1, 1]
         ax.plot(t, df["left_avg"], color=C_PEACH, lw=1.5, label="Left Avg RPM")
         ax.plot(t, df["right_avg"], color=C_BLUE, lw=1.5, label="Right Avg RPM")
         ax.set_ylabel("RPM")
         ax.set_xlabel("Time (s)")
-        ax.set_title("Motor Speed")
-        ax.legend(loc="upper left")
+        ax.set_title("Motor Speed & Pitch")
+        
+        if "gyro_pitch" in df.columns:
+            ax3 = ax.twinx()
+            ax3.plot(t, df["gyro_pitch"], color=C_GREEN, lw=1.5, ls="-.", label="Pitch (deg)")
+            ax3.set_ylabel("Pitch (deg)", color=C_GREEN)
+            ax3.legend(loc="upper right")
+            ax.legend(loc="upper left")
+        else:
+            ax.legend(loc="upper left")
 
-    elif action == 3: # MinSpeed
+    elif action == 99: # MinSpeed
         fig.suptitle(f"MinSpeed Test (telemetry_v1)  #{idx + 1}", fontsize=14, fontweight="bold", y=0.97)
         # Just use top left for diff and bottom left for power step
         ax = axes[0, 0]
@@ -352,14 +360,22 @@ def plot_telemetry_v1(blk: TestBlock, idx: int) -> plt.Figure:
         ax.set_xlabel("Time (s)")
         ax.set_title("Heading Correction")
         
-        # BR: Motor RPM
+        # BR: Motor RPM & Pitch
         ax = axes[1, 1]
         ax.plot(t, df["left_avg"], color=C_PEACH, lw=1.5, label="Left Avg RPM")
         ax.plot(t, df["right_avg"], color=C_BLUE, lw=1.5, label="Right Avg RPM")
         ax.set_ylabel("RPM")
         ax.set_xlabel("Time (s)")
-        ax.set_title("Motor Speed")
-        ax.legend(loc="upper left")
+        ax.set_title("Motor Speed & Pitch")
+        
+        if "gyro_pitch" in df.columns:
+            ax3 = ax.twinx()
+            ax3.plot(t, df["gyro_pitch"], color=C_GREEN, lw=1.5, ls="-.", label="Pitch (deg)")
+            ax3.set_ylabel("Pitch (deg)", color=C_GREEN)
+            ax3.legend(loc="upper right")
+            ax.legend(loc="upper left")
+        else:
+            ax.legend(loc="upper left")
 
     if meta:
         fig.text(0.5, 0.02, meta, ha="center", fontsize=9, color=C_DIM)
