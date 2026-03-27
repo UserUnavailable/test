@@ -908,9 +908,9 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
     // 初始化驱动 PID (传入对应方向的参数)
     JAR_PID drivePID(target_enc, drive_kp, drive_ki, drive_kd, drive_starti, drive_settle_error, drive_settle_time, drive_timeout); 
     
-    // 航向PID (注意: JAR的heading_max_voltage通常设为相对较小的值)
+    // 航向PID微调: 降低 P 以减小前进弧线时的过冲，适当增加 D 加强阻尼
     float heading_error = target_heading - Gyro.rotation(degrees);
-    JAR_PID headingPID(heading_error, 3.0, 0.0, 15.0, 0, 1.0, 100, 0);
+    JAR_PID headingPID(heading_error, 2.5, 0.0, 18.0, 0, 1.0, 100, 0);
 
     float heading_max_voltage = 40;
     float prev_drive_output = 0.0; // 用于限制起步加速度
@@ -2389,13 +2389,13 @@ void test_straight(double enc, float g=0, bool use_jar = true)
   test_log_active = true;
   test_log_task_handle = task(test_log_task_fn);
   
-  if(use_jar) run_gyro_JAR(-enc, g);
-  else Run_gyro_new(-dist, g);
+  if(use_jar) run_gyro_JAR(-enc, 0);
+  else Run_gyro_new(-dist, 0);
   
   test_log_active = false;
   vex::task::sleep(100);
   test_log_dump();
-  printf("--- test_straight backward complete, enc=%.1f, g=%.1f ---\n", -dist, g);
+  printf("--- test_straight backward complete, enc=%.1f, g=0.0 ---\n", -dist);
   vex::task::sleep(500);
 }
 
