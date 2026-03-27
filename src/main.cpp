@@ -173,7 +173,7 @@ void autonomous(void) {
   //Hook();//AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
   //test_gyro(50); 
   //Vision_Center_Track(15);
-  test_straight(800,0,true);
+  test_straight(800,45, true);
   //test_turn();
   //Run_wall(-50,2000,3);
   //test_minspeed();

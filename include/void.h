@@ -887,25 +887,19 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
     // ================== 前后两套PID参数分离 ==================
     // 激进调参阶段：悬崖刹车法 (高P高D) + 防翘头
     float drive_kp, drive_ki, drive_kd, drive_starti, drive_settle_error, drive_settle_time;
-        if (target_enc > 0) {
-        // 前进：防翘尾处理 + 解决过冲
-        // 降低 P 让减速区大幅拉长 (127/0.18 ≈ 700度开始减速)，极其平缓地卸去动力，防止重心前移翘尾。
-        // 上一次 ki=0.02 导致了严重的积分爆炸（最后倒车冲到了 825度）。
-        // 现在大幅削减 ki 并使用极其微弱的起效窗口，仅用于破除最后的 2-3 度死区。
-        drive_kp = 0.18;  
-        drive_ki = 0.002; // 极其微小的积分
-        drive_kd = 1.2;   
-        drive_starti = 50; // 只在最后 50 度才允许积分介入
+    if (target_enc > 0) {
+        // 前进：极限界限测试过冲，回退到甜点参数
+        drive_kp = 0.28;  
+        drive_ki = 0.002;
+        drive_kd = 1.8;   
+        drive_starti = 50;
         drive_settle_error = 3.5;
         drive_settle_time = 100;
     } else {
-        // 后退：解决中段翘头与末段死区问题
-        // 将 P 调回 0.16，恢复之前的起步速度。
-        // 为了防止中段翘头（即退出 127 满功率限幅时的顿挫），我们加入“最大加速度限制（Slew Rate）”或直接调小 max_voltage 
-        // 使得加速和减速更加平滑。这里通过保持 D 项在 1.0 的安全范围内，并依靠 0.16 的 P 项，在速度和稳定性之间取得平衡。
-        drive_kp = 0.16;  
+        // 后退：极限界限测试过冲，回退到甜点参数
+        drive_kp = 0.25;  
         drive_ki = 0.002; 
-        drive_kd = 1.0;   
+        drive_kd = 1.6;   
         drive_starti = 50; 
         drive_settle_error = 3.5;
         drive_settle_time = 100;
@@ -932,8 +926,8 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
         float heading_output = headingPID.compute(head_err);
 
         // --- 新增：起步加速度限制 (Slew Rate Control) ---
-        // 仅限制加速过程，不限制减速，防止起步瞬间爆发导致翘头
-        float max_step = 10; // 每 10ms 最大电压增加量 (约 0.15 秒内平滑过渡到满速 127)
+        // 极限测试出现翘头，回退 Slew Rate 至稍微激进但稳定的值 (20)，约 0.06 秒推到满速
+        float max_step = 20; // 每 10ms 最大电压增加量
         if (fabs(drive_output) > fabs(prev_drive_output)) {
             if (drive_output > 0 && drive_output > prev_drive_output + max_step) {
                 drive_output = prev_drive_output + max_step;
