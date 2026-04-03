@@ -121,7 +121,7 @@ void pre_auton(void) {
 
   // ===== 调试强制设置 =====
   // 设置 FORCE_AUTO ；=0 恢复屏幕选择
-  #define FORCE_AUTO 1
+  #define FORCE_AUTO 0
   
   #if FORCE_AUTO
     Auto = 8;        // 自动程序 1
