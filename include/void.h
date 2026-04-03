@@ -894,7 +894,7 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
         drive_kd = 1.8;   
         drive_starti = 50;
         drive_settle_error = 3.5;
-        drive_settle_time = 100;
+        drive_settle_time = 50;
     } else {
         // 后退：极限界限测试过冲，回退到甜点参数
         drive_kp = 0.25;  
@@ -902,14 +902,14 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
         drive_kd = 1.6;   
         drive_starti = 50; 
         drive_settle_error = 3.5;
-        drive_settle_time = 100;
+        drive_settle_time = 50;
     }
 
     // 初始化驱动 PID (传入对应方向的参数)
     JAR_PID drivePID(target_enc, drive_kp, drive_ki, drive_kd, drive_starti, drive_settle_error, drive_settle_time, drive_timeout); 
     
     // 航向PID微调: 降低 P 以减小前进弧线时的过冲，适当增加 D 加强阻尼
-    float heading_error = target_heading - Gyro.rotation(degrees);
+    float heading_error = reduce_negative_180_to_180(target_heading - Gyro.rotation(degrees));
     JAR_PID headingPID(heading_error, 2.5, 0.0, 18.0, 0, 1.0, 100, 0);
 
     float heading_max_voltage = 40;
@@ -920,7 +920,7 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
                                   RightRun_1.position(deg) + RightRun_2.position(deg) + RightRun_3.position(deg)) / 6.0;
         
         float drive_err = target_enc - average_position;
-        float head_err = target_heading - Gyro.rotation(degrees);
+        float head_err = reduce_negative_180_to_180(target_heading - Gyro.rotation(degrees));
 
         float drive_output = drivePID.compute(drive_err);
         float heading_output = headingPID.compute(head_err);
@@ -987,6 +987,109 @@ void run_gyro_JAR(double target_enc, float target_heading = now, float max_volta
         Run_Ctrl(left_out, right_out);
         vex::task::sleep(10); 
     }
+    RunStop(brake);
+}
+
+/**
+ * @brief 移植自 JAR-Template 的单侧底盘转向 (Swing Turn)
+ * 将底盘的一侧锁死作为旋转轴心，仅依靠另一侧车轮改变航向角
+ * @param target_heading 目标航向角
+ * @param move_side 动哪一侧 (left: 动左侧、右侧锁死; right: 动右侧、左侧锁死)
+ * @param max_voltage 最大输出功率 (0-100)
+ * @param force_dir 强制转向方向 (0: 自动最短路径, 1: 强制顺时针/从左往右转, -1: 强制逆时针/从右往左转)
+ */
+void turn_side_JAR(float target_heading, turnType move_side, float max_voltage = 127, int force_dir = 0) {
+    now = target_heading;
+    bool move_left = (move_side == left);
+    target_heading = Side * target_heading + Start; // 适应场地
+    
+    // PID 参数预设 (Swing turn 需要独立的一套参数，因为单侧锁死时摩擦力极大)
+    // 引入 Min Power 逻辑后，无需再依赖极高的 P 和 I 来破死区。
+    // 降低 P 可以避免极速过快导致的严重过冲，降低 I 防止积分爆炸。
+    float swing_kp = 3.0;   // 保持适中
+    float swing_ki = 0.01;  // 仅消除微小静差
+    float swing_kd = 35.0;  // 【大幅提高】为了在靠近目标时压制 P 项，使总输出反向以跳过 Min Power 钳位，实现提前刹车
+    float swing_starti = 15.0;
+    float swing_settle_error = 1.0;
+    float swing_settle_time = 50;
+    float swing_timeout = 2000;
+    
+    // 新增：最小起步电压 (Min Power)，破除静摩擦死区
+    // 数据显示 15V 时底盘仍可能卡死，故将钳位提升至 20V
+    float min_power = 20.0; 
+    
+    float current_heading = Gyro.rotation(degrees);
+    float initial_error = reduce_negative_180_to_180(target_heading - current_heading);
+    
+    // 处理强制转向方向 (覆盖最短路径)
+    if (force_dir == 1 && initial_error < 0) {
+        initial_error += 360; // 强制顺时针转
+    } else if (force_dir == -1 && initial_error > 0) {
+        initial_error -= 360; // 强制逆时针转
+    }
+    
+    float absolute_target = current_heading + initial_error;
+    
+    JAR_PID swingPID(initial_error, swing_kp, swing_ki, swing_kd, swing_starti, swing_settle_error, swing_settle_time, swing_timeout);
+    
+    while (!swingPID.is_settled()) {
+        float error;
+        if (force_dir != 0) {
+            error = absolute_target - Gyro.rotation(degrees);
+        } else {
+            error = reduce_negative_180_to_180(target_heading - Gyro.rotation(degrees));
+        }
+        float output = swingPID.compute(error);
+        float current_deriv = swingPID.current_deriv;
+        
+        // --- 新增：最小电压钳位 (Min Power 逻辑) ---
+        // 只有当误差大于阈值（1.0 度）时才强行给底盘推力
+        if (fabs(error) > 1.0) {
+            // 关键：只有当 PID 尝试往目标方向推（或输出为0）且推力不足时，才进行钳位。
+            // 这样可以保留 D 项在面临过冲时的正常反向刹车能力！
+            if (fabs(output) < min_power && (output == 0 || (output * error > 0))) {
+                output = sgn(error) * min_power;
+            }
+        }
+
+        // 限幅处理
+        if (fabs(output) > max_voltage) {
+            output = sgn(output) * max_voltage;
+        }
+        
+        // 记录遥测日志 (action = 4 代表 Swing Turn)
+        current_telemetry.action = 4; 
+        current_telemetry.target = target_heading;
+        current_telemetry.current = Gyro.rotation(degrees);
+        current_telemetry.error = error;
+        current_telemetry.error_deriv = current_deriv;
+        current_telemetry.p_out = swingPID.kp * error;
+        current_telemetry.i_out = swingPID.ki * swingPID.accumulated_error;
+        current_telemetry.d_out = swingPID.kd * current_deriv;
+        current_telemetry.total_out = output;
+
+        // 根据选择的侧边输出电压，并锁死另一侧
+        if (move_left) {
+            // 左侧提供推力，右侧强行锁死作为旋转圆心
+            m(LeftRun_1, output);
+            m(LeftRun_2, output);
+            m(LeftRun_3, output);
+            RightRun_1.stop(hold);
+            RightRun_2.stop(hold);
+            RightRun_3.stop(hold);
+        } else {
+            // 右侧提供推力(反转以维持相同的转向方向定义)，左侧强行锁死
+            m(RightRun_1, -output);
+            m(RightRun_2, -output);
+            m(RightRun_3, -output);
+            LeftRun_1.stop(hold);
+            LeftRun_2.stop(hold);
+            LeftRun_3.stop(hold);
+        }
+        
+        vex::task::sleep(10);
+    }
+    // 结束后统一恢复刹车模式
     RunStop(brake);
 }
 
@@ -1333,14 +1436,14 @@ void Turn_Gyro_new(float target)
    target = Side * target + Start; //根据场地方向调整目标角度
    
    // ====== PID与退出条件参数 ======
-   float kp = 4.2;            // 比例系数 
-   float ki = 10.0;           // 积分系数 (继续加大，目前1.5还是不够快)
-   float kd = 0.25;           // 微分系数 (稍微加大阻尼，压制过冲)
+   float kp = 4.2;            // 比例系数 (稍微回调，防止微小过冲)
+   float ki = 8.0;            // 积分系数 (适中，主要用于破除最后死区)
+   float kd = 0.42;           // 微分系数 (稍微加回一点点，平滑末端减速曲线)
    float start_i = 15.0;      // 开始累加积分的误差阈值(度)
-   float max_voltage = 100;   // 最大输出功率
+   float max_voltage = 90;    // 最大输出功率
    
    float settle_error = 2.0;  // 稳定误差容忍度(度)
-   float settle_time = 150;   // 在容忍度内维持的时间(ms)才能退出
+   float settle_time = 100;   // 在容忍度内维持的时间(ms)才能退出
    float timeout = 3000;      // 总体超时保护(ms)
    // ===================================================
    
@@ -2343,6 +2446,84 @@ void test_log_dump()
   vex::task::sleep(LINE_DELAY);
   printf("--- log end (total %d samples) ---\n", test_log_count);
   vex::task::sleep(200);
+}
+
+/**
+ * @brief 单侧转向测试函数 (含遥测日志)
+ * 自动测试左侧转向和右侧转向，并将遥测数据写入缓冲区以供导出分析。
+ */
+void test_turn_side()
+{
+  Side = 1; 
+  Start = Gyro.rotation(degrees);
+
+  // === 动作1: 左侧向前 (右侧锁死，向右转) ===
+  float target1 = Start + 90.0; 
+  current_telemetry = {0};
+  printf("test_turn_side (1. Left forward, target=%.1f)\n", target1);
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  vex::task::sleep(50);
+  
+  turn_side_JAR(target1, left); // left = 动左侧
+
+  test_log_active = false;
+  vex::task::sleep(100);
+  test_log_dump();
+  printf("--- Action 1 Complete ---\n");
+  
+  vex::task::sleep(1000); // 停顿1秒
+
+  // === 动作2: 左侧向后 (右侧锁死，退回原位) ===
+  float target2 = Start; 
+  current_telemetry = {0};
+  printf("test_turn_side (2. Left backward, target=%.1f)\n", target2);
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  vex::task::sleep(50);
+  
+  turn_side_JAR(target2, left); 
+
+  test_log_active = false;
+  vex::task::sleep(100);
+  test_log_dump();
+  printf("--- Action 2 Complete ---\n");
+
+  vex::task::sleep(1000); // 停顿1秒
+
+  // === 动作3: 右侧向前 (左侧锁死，向左转) ===
+  float target3 = Start - 90.0; 
+  current_telemetry = {0};
+  printf("test_turn_side (3. Right forward, target=%.1f)\n", target3);
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  vex::task::sleep(50);
+  
+  turn_side_JAR(target3, right); // right = 动右侧
+
+  test_log_active = false;
+  vex::task::sleep(100);
+  test_log_dump();
+  printf("--- Action 3 Complete ---\n");
+
+  vex::task::sleep(1000); // 停顿1秒
+
+  // === 动作4: 右侧向后 (左侧锁死，退回原位) ===
+  float target4 = Start; 
+  current_telemetry = {0};
+  printf("test_turn_side (4. Right backward, target=%.1f)\n", target4);
+  test_log_active = true;
+  test_log_task_handle = task(test_log_task_fn);
+  vex::task::sleep(50);
+  
+  turn_side_JAR(target4, right); 
+
+  test_log_active = false;
+  vex::task::sleep(100);
+  test_log_dump();
+  printf("--- Action 4 Complete ---\n");
+
+  printf("=== All 4 turn_side actions complete ===\n");
 }
 
 /**

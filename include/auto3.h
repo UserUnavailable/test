@@ -27,6 +27,7 @@ Turn_Gyro_new(182);
 Run_gyro(-520, 100, 182);
 Turn_Gyro_new(227);
 */
+/*
 now=-14;
 Start=Gyro.rotation(degrees)-now*Side;
 Wing_L.set(true);
@@ -53,3 +54,24 @@ Wing_L.set(false);
 Turn_Gyro_new(182);
 Run_gyro(-520, 100, 182);
 Turn_Gyro_new(227);
+*/
+now=-16;
+Start=Gyro.rotation(degrees)-now*Side;
+Get_Ball(2);
+run_gyro_JAR(330);
+wait(100);
+run_gyro_JAR(495, -90);
+Run_wall(30,600,5);
+Load.set(true);
+wait(200);
+turn_side_JAR(-20, right);
+run_gyro_JAR(-570, 0);
+turn_side_JAR(-180, right, 127, 1);
+Run_wall(30,1200,5);
+run_gyro_JAR(-520, -180);
+Get_Ball(1);    
+Run_wall(-20,2400,5);
+wait(200);
+Get_Ball(0);
+Load.set(false);
+hook();

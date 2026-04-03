@@ -124,8 +124,8 @@ void pre_auton(void) {
   #define FORCE_AUTO 1
   
   #if FORCE_AUTO
-    Auto = 6;        // 自动程序 1
-    Alliance = 1;   // -1=蓝方, 1=红方
+    Auto = 8;        // 自动程序 1
+    Alliance = -1;   // -1=蓝方, 1=红方
     Side = 1;
     button = 0;
     PrintTask=task(Print);
@@ -150,15 +150,14 @@ void pre_auton(void) {
 
 void autonomous(void) {
   //Up.set(true);
-  //Basket.set(true);
+  Basket.set(true);
   auto_control=1;
   driver_control=0;
   ColorThread=thread(Color_Control);
-  Anchor.set(false);
 // ..........................................................................
-  //AutoPro();
+  AutoPro();
   //Side=1;
-  //Hook();
+  //hook();
 
   /*
   Up.set(true);
@@ -173,8 +172,9 @@ void autonomous(void) {
   //Hook();//AutoPro被注释后需手动设置,否则AutoScreen()会留下Side=0
   //test_gyro(50); 
   //Vision_Center_Track(15);
-  test_straight(300,0, true);
+  //test_straight(300,0, true);
   //test_turn();
+  //test_turn_side();
   //Run_wall(-50,2000,3);
   //test_minspeed();
 
@@ -194,7 +194,7 @@ void autonomous(void) {
 
 void usercontrol(void) {
   // User control code here, inside the loop
-  //Up.set(true);
+  Up.set(false);
   Basket.set(true);
   RunStop(coast);
 
@@ -205,7 +205,6 @@ void usercontrol(void) {
   PrintTask=task(Print);
   // //driver_control=1;
 
-  Wing_R.set(true);
   // //Vision_Center_Track();
   Joystick();
   // while (1) {
